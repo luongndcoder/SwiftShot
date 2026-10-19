@@ -39,7 +39,8 @@ final class UnifiedOverlayView: NSView {
 
     // Subviews
     private var hudView: InPlaceHUDView?
-    private var activeTextInput: TextInputWindow?
+    private var activeTextView: InPlaceTextView?
+    private var magnifierView: MagnifierView?
 
     // Callbacks
     private let onFinishCapture: (NSImage, CGRect) -> Void
@@ -75,6 +76,26 @@ final class UnifiedOverlayView: NSView {
         hud.isHidden = true
         addSubview(hud)
         self.hudView = hud
+
+        let mag = MagnifierView()
+        mag.isHidden = true
+        addSubview(mag)
+        self.magnifierView = mag
+
+        // Track mouse movement for magnifier
+        let tracking = NSTrackingArea(rect: bounds, options: [.mouseMoved, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
+        addTrackingArea(tracking)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        // Show magnifier when no selection is made yet, or when in select mode
+        if selectionRect == nil || isSelecting {
+            magnifierView?.isHidden = false
+            magnifierView?.update(at: point, in: bounds, backgroundImage: backgroundImage, scale: 2.0)
+        } else {
+            magnifierView?.isHidden = true
+        }
     }
 
     // MARK: - HUD Actions
@@ -263,20 +284,30 @@ final class UnifiedOverlayView: NSView {
             undoStack.removeAll()
             needsDisplay = true
         case .text:
-            activeTextInput?.cancel()
-            let input = TextInputWindow(at: point) { [weak self] text in
-                guard let self, !text.isEmpty else { return }
-                let ann = Annotation(
-                    kind: .text, points: [], start: point, end: point,
-                    color: self.currentColor, strokeWidth: self.strokeWidth,
-                    text: text
-                )
-                self.annotations.append(ann)
-                self.undoStack.removeAll()
-                self.needsDisplay = true
-            } onCancel: {}
-            input.show()
-            activeTextInput = input
+            activeTextView?.commit()
+            let textView = InPlaceTextView(
+                at: point,
+                textColor: currentColor,
+                fontSize: max(16, strokeWidth * 5),
+                onCommit: { [weak self] text in
+                    guard let self else { return }
+                    let ann = Annotation(
+                        kind: .text, points: [], start: point, end: point,
+                        color: self.currentColor, strokeWidth: self.strokeWidth,
+                        text: text
+                    )
+                    self.annotations.append(ann)
+                    self.undoStack.removeAll()
+                    self.activeTextView = nil
+                    self.needsDisplay = true
+                },
+                onCancel: { [weak self] in
+                    self?.activeTextView = nil
+                }
+            )
+            addSubview(textView)
+            textView.focus()
+            activeTextView = textView
         case .freehand, .marker:
             currentAnnotation = Annotation(
                 kind: selectedTool, points: [point], start: point, end: point,
@@ -547,7 +578,11 @@ final class UnifiedOverlayView: NSView {
                     .font: NSFont.boldSystemFont(ofSize: max(16, ann.strokeWidth * 5)),
                     .foregroundColor: ann.color
                 ]
-                text.draw(at: ann.start, withAttributes: attrs)
+                let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
+                context.saveGState()
+                context.textPosition = CGPoint(x: ann.start.x, y: ann.start.y)
+                CTLineDraw(line, context)
+                context.restoreGState()
             }
         case .blur, .pixelate:
             drawBlurOrPixelate(ann: ann, in: context)

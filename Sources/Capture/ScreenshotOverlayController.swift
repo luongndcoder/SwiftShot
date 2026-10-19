@@ -58,6 +58,11 @@ final class ScreenshotOverlayController {
 
         // Install local key monitor to ensure Esc always cancels regardless of focus
         self.eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak overlayView] event in
+            // If active text input is focused, let it receive typing, Enter, and Esc
+            if overlayView?.window?.firstResponder is NSTextView {
+                return event
+            }
+
             if event.keyCode == 53 { // kVK_Escape
                 self?.cancel()
                 return nil
