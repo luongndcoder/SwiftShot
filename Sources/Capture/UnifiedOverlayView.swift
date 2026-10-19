@@ -226,13 +226,14 @@ final class UnifiedOverlayView: NSView {
         }
         selectedAnnotationIndex = nil
 
-        // 5. Check if moving whole selection (if spacebar or Alt or tool == .select)
-        if event.modifierFlags.contains(.option) || selectedTool == .select {
+        // 5. Check if moving whole selection (Alt or the Move tool)
+        if event.modifierFlags.contains(.option) || selectedTool == .move {
             if sel.contains(point) {
                 isMovingSelection = true
                 dragStartPoint = point
                 initialSelectionRect = sel
                 hudView?.isHidden = true
+                needsDisplay = true
                 return
             }
         }
@@ -457,7 +458,18 @@ final class UnifiedOverlayView: NSView {
 
     private func detectHandle(at point: CGPoint, in rect: CGRect) -> Handle {
         let handleSize: CGFloat = 10
-        let handles: [(Handle, CGPoint)] = [
+        for (handle, p) in handlePoints(in: rect) {
+            let hitRect = CGRect(x: p.x - handleSize, y: p.y - handleSize, width: handleSize * 2, height: handleSize * 2)
+            if hitRect.contains(point) {
+                return handle
+            }
+        }
+        return .none
+    }
+
+    /// The positions of the eight resize handles.
+    private func handlePoints(in rect: CGRect) -> [(Handle, CGPoint)] {
+        [
             (.topLeft, CGPoint(x: rect.minX, y: rect.maxY)),
             (.topMiddle, CGPoint(x: rect.midX, y: rect.maxY)),
             (.topRight, CGPoint(x: rect.maxX, y: rect.maxY)),
@@ -467,13 +479,6 @@ final class UnifiedOverlayView: NSView {
             (.bottomMiddle, CGPoint(x: rect.midX, y: rect.minY)),
             (.bottomRight, CGPoint(x: rect.maxX, y: rect.minY)),
         ]
-        for (h, p) in handles {
-            let hitRect = CGRect(x: p.x - handleSize, y: p.y - handleSize, width: handleSize * 2, height: handleSize * 2)
-            if hitRect.contains(point) {
-                return h
-            }
-        }
-        return .none
     }
 
     private func resizeSelection(from rect: CGRect, handle: Handle, currentPoint: CGPoint, mirror: Bool = false) -> CGRect {
@@ -744,25 +749,140 @@ final class UnifiedOverlayView: NSView {
         context.stroke(rect)
 
         let handleSize: CGFloat = 8
-        let handlePoints = [
-            CGPoint(x: rect.minX, y: rect.maxY),
-            CGPoint(x: rect.midX, y: rect.maxY),
-            CGPoint(x: rect.maxX, y: rect.maxY),
-            CGPoint(x: rect.minX, y: rect.midY),
-            CGPoint(x: rect.maxX, y: rect.midY),
-            CGPoint(x: rect.minX, y: rect.minY),
-            CGPoint(x: rect.midX, y: rect.minY),
-            CGPoint(x: rect.maxX, y: rect.minY),
-        ]
 
         context.setFillColor(NSColor.white.cgColor)
         context.setStrokeColor(NSColor.systemBlue.cgColor)
         context.setLineWidth(1.5)
 
-        for p in handlePoints {
+        for (_, p) in handlePoints(in: rect) {
             let hRect = CGRect(x: p.x - handleSize / 2, y: p.y - handleSize / 2, width: handleSize, height: handleSize)
             context.fill(hRect)
             context.stroke(hRect)
+        }
+    }
+
+    // MARK: - Cursor
+
+    /// Shows the hand cursor over the selection, resize cursors on the handles and a
+    /// crosshair while a drawing tool is active — the same affordances Flameshot has.
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        guard let sel = selectionRect else { return }
+
+        for (handle, point) in handlePoints(in: sel) {
+            let rect = CGRect(x: point.x - 7, y: point.y - 7, width: 14, height: 14)
+            addCursorRect(rect, cursor: Self.cursor(for: handle))
+        }
+
+        if selectedTool == .move {
+            addCursorRect(sel, cursor: isMovingSelection ? .closedHand : .openHand)
+        } else if selectedTool != .select, isDrawingTool(selectedTool) {
+            addCursorRect(sel, cursor: .crosshair)
+        }
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        if isMovingSelection {
+            NSCursor.closedHand.set()
+        } else {
+            super.cursorUpdate(with: event)
+        }
+    }
+
+    /// The cursor shapes depend on the selection, so they have to be recalculated
+    /// whenever the overlay redraws.
+    override var needsDisplay: Bool {
+        get { super.needsDisplay }
+        set {
+            super.needsDisplay = newValue
+            if newValue {
+                window?.invalidateCursorRects(for: self)
+            }
+        }
+    }
+
+    /// The cursor shown when hovering a resize handle.
+    private static func cursor(for handle: Handle) -> NSCursor {
+        switch handle {
+        case .middleLeft, .middleRight:
+            return .resizeLeftRight
+        case .topMiddle, .bottomMiddle:
+            return .resizeUpDown
+        case .topLeft, .bottomRight:
+            return diagonalResizeCursor(flipped: false)
+        case .topRight, .bottomLeft:
+            return diagonalResizeCursor(flipped: true)
+        case .none:
+            return .arrow
+        }
+    }
+
+    /// macOS has no public diagonal resize cursor, so one is drawn.
+    private static func diagonalResizeCursor(flipped: Bool) -> NSCursor {
+        let key = flipped ? "diagonal.flipped" : "diagonal"
+        if let cached = diagonalCursors[key] { return cached }
+
+        let side: CGFloat = 16
+        let image = NSImage(size: NSSize(width: side, height: side))
+        image.lockFocus()
+
+        let start = flipped ? NSPoint(x: 3, y: 13) : NSPoint(x: 3, y: 3)
+        let end = flipped ? NSPoint(x: 13, y: 3) : NSPoint(x: 13, y: 13)
+
+        func arrowHead(at tip: NSPoint, towards other: NSPoint) -> NSBezierPath {
+            let path = NSBezierPath()
+            let dx = other.x - tip.x
+            let dy = other.y - tip.y
+            let length = max((dx * dx + dy * dy).squareRoot(), 0.001)
+            let ux = dx / length
+            let uy = dy / length
+            let size: CGFloat = 4
+            path.move(to: tip)
+            path.line(to: NSPoint(x: tip.x + ux * size - uy * size * 0.6, y: tip.y + uy * size + ux * size * 0.6))
+            path.move(to: tip)
+            path.line(to: NSPoint(x: tip.x + ux * size + uy * size * 0.6, y: tip.y + uy * size - ux * size * 0.6))
+            return path
+        }
+
+        let shaft = NSBezierPath()
+        shaft.move(to: start)
+        shaft.line(to: end)
+        shaft.lineWidth = 1.2
+        shaft.lineCapStyle = .round
+
+        let head1 = arrowHead(at: start, towards: end)
+        let head2 = arrowHead(at: end, towards: start)
+        head1.lineWidth = 1.2
+        head2.lineWidth = 1.2
+        head1.lineCapStyle = .round
+        head2.lineCapStyle = .round
+
+        // White outline first, then the black arrow on top.
+        for path in [shaft, head1, head2] {
+            path.lineWidth += 2
+            NSColor.white.setStroke()
+            path.stroke()
+        }
+        NSColor.black.setStroke()
+        for path in [shaft, head1, head2] {
+            path.lineWidth -= 2
+            path.stroke()
+        }
+
+        image.unlockFocus()
+
+        let cursor = NSCursor(image: image, hotSpot: NSPoint(x: side / 2, y: side / 2))
+        diagonalCursors[key] = cursor
+        return cursor
+    }
+
+    private static var diagonalCursors: [String: NSCursor] = [:]
+
+    /// Whether the tool draws something on the canvas.
+    private func isDrawingTool(_ tool: Annotation.Kind) -> Bool {
+        switch tool {
+        case .select, .move: return false
+        default: return true
         }
     }
 
@@ -799,7 +919,7 @@ final class UnifiedOverlayView: NSView {
         context.setLineJoin(.round)
 
         switch ann.kind {
-        case .select:
+        case .select, .move:
             break
         case .arrow:
             drawArrow(start: ann.start, end: ann.end, in: context)
@@ -1149,6 +1269,10 @@ final class UnifiedOverlayView: NSView {
                 return
             case "p":
                 triggerPin()
+                return
+            case "m":
+                // Move the selection area (like Flameshot's Ctrl+M).
+                hudView?.selectTool(.move)
                 return
             case "z":
                 if flags.contains(.shift) { redo() } else { undo() }

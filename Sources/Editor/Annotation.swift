@@ -4,7 +4,8 @@ import CoreGraphics
 /// The annotation model — a single drawable shape, blur/pixelate region, or counter badge.
 struct Annotation: Equatable {
     enum Kind: String, Codable, CaseIterable {
-        case select     // Selection mode (no drawing)
+        case select     // Selection mode (picks drawn objects)
+        case move       // Move the selection rectangle (the "hand" tool)
         case arrow
         case line
         case rectangle

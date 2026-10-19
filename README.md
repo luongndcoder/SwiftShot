@@ -58,6 +58,8 @@
   - Optionally copies the file path to the clipboard
   - Optionally asks where to save every time
 - **🖼️ Capture Options**: reuse the last region, copy on double click, configurable dim opacity, optional pixel magnifier
+- **🖐️ Move Selection Tool**: kéo bằng "bàn tay" để di chuyển vùng chọn — cursor hiện 🖐 khi hover và ✊ khi đang kéo, kèm cursor resize hướng cho 8 handle (⇱ ⇲ ↔ ↕)
+- **🔎 Tooltips + nhãn trạng thái**: hover vào icon nào là nhãn hiện tên tính năng ngay trên thanh công cụ, không phải đoán mò
 - **⚡ Pixel-Perfect Retina Capture**: Powered by macOS 14+ `ScreenCaptureKit` with native backing scale resolution.
 - **⌨️ Muscle-Memory Shortcuts**:
   - `Command + Shift + 4` (`⇧⌘4`): Activate capture
