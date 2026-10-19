@@ -6,7 +6,6 @@ final class MagnifierView: NSView {
     private var pixelImage: CGImage?
     private var colorText: String = ""
     private var hexText: String = ""
-    private var coordText: String = ""
     private var currentColor: NSColor = .black
 
     override init(frame: NSRect) {
@@ -28,7 +27,6 @@ final class MagnifierView: NSView {
     }
 
     func update(at point: CGPoint, in bounds: CGRect, backgroundImage: CGImage, scale: CGFloat) {
-        // Crop 25x25 pixels around point
         let sampleSize: CGFloat = 24
         let bgW = CGFloat(backgroundImage.width)
         let bgH = CGFloat(backgroundImage.height)
@@ -45,7 +43,6 @@ final class MagnifierView: NSView {
 
         self.pixelImage = backgroundImage.cropping(to: cropRect)
 
-        // Read central pixel color
         if let crop = self.pixelImage,
            let data = crop.dataProvider?.data,
            let ptr = CFDataGetBytePtr(data) {
@@ -59,10 +56,8 @@ final class MagnifierView: NSView {
             self.currentColor = NSColor(red: CGFloat(r)/255.0, green: CGFloat(g)/255.0, blue: CGFloat(b)/255.0, alpha: 1.0)
             self.colorText = "RGB: \(r), \(g), \(b)"
             self.hexText = String(format: "#%02X%02X%02X", r, g, b)
-            self.coordText = "(\(Int(point.x)), \(Int(point.y)))"
         }
 
-        // Position magnifier offset from mouse so it doesn't block view
         var mx = point.x + 20
         var my = point.y - 180
         if mx + 140 > bounds.width { mx = point.x - 160 }
@@ -75,7 +70,7 @@ final class MagnifierView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
 
-        // Top 100x100 zoomed pixel grid
+        // 1. Top zoomed pixel grid
         let zoomRect = CGRect(x: 10, y: bounds.height - 110, width: 120, height: 100)
         ctx.saveGState()
         let clipPath = CGPath(roundedRect: zoomRect, cornerWidth: 6, cornerHeight: 6, transform: nil)
@@ -98,31 +93,39 @@ final class MagnifierView: NSView {
         ctx.addLine(to: CGPoint(x: midX, y: midY + 8))
         ctx.strokePath()
 
-        // Border around zoom area
         ctx.restoreGState()
         ctx.addPath(clipPath)
         ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.3).cgColor)
         ctx.setLineWidth(1)
         ctx.strokePath()
 
-        // Color preview box
+        // 2. Color preview box
         let colorBox = CGRect(x: 10, y: 12, width: 24, height: 24)
         ctx.setFillColor(currentColor.cgColor)
         ctx.fill(colorBox)
         ctx.setStrokeColor(NSColor.white.cgColor)
         ctx.stroke(colorBox)
 
-        // Text info: HEX & RGB & coords
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .bold),
-            .foregroundColor: NSColor.white
-        ]
-        hexText.draw(at: CGPoint(x: 42, y: 26), withAttributes: attrs)
+        // 3. Draw text info via CoreText (100% thread-safe & zero AppKit nil-dict exceptions)
+        if !hexText.isEmpty {
+            drawCoreText(hexText, at: CGPoint(x: 42, y: 26), in: ctx, fontSize: 10, isBold: true, color: .white)
+        }
+        if !colorText.isEmpty {
+            drawCoreText(colorText, at: CGPoint(x: 42, y: 12), in: ctx, fontSize: 9, isBold: false, color: NSColor(calibratedWhite: 0.8, alpha: 1.0))
+        }
+    }
 
-        let smallAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 9, weight: .regular),
-            .foregroundColor: NSColor(calibratedWhite: 0.8, alpha: 1.0)
+    private func drawCoreText(_ text: String, at point: CGPoint, in ctx: CGContext, fontSize: CGFloat, isBold: Bool, color: NSColor) {
+        let font = CTFontCreateWithName((isBold ? "Menlo-Bold" : "Menlo") as CFString, fontSize, nil)
+        let attrs: [CFString: Any] = [
+            kCTFontAttributeName: font,
+            kCTForegroundColorAttributeName: color.cgColor
         ]
-        colorText.draw(at: CGPoint(x: 42, y: 12), withAttributes: smallAttrs)
+        let attrStr = CFAttributedStringCreate(kCFAllocatorDefault, text as CFString, attrs as CFDictionary)!
+        let line = CTLineCreateWithAttributedString(attrStr)
+        ctx.saveGState()
+        ctx.textPosition = point
+        CTLineDraw(line, ctx)
+        ctx.restoreGState()
     }
 }
