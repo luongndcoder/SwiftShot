@@ -12,3 +12,6 @@ DerivedData/
 # User generated
 *.png.backup
 /tmp/
+
+# Release artifacts
+/dist/
