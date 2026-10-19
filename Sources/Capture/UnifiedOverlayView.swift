@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import CoreImage
 import Carbon.HIToolbox
 
 /// Unified Flameshot-style overlay:
@@ -30,8 +31,8 @@ final class UnifiedOverlayView: NSView {
 
     // Tools & Annotations
     var selectedTool: Annotation.Kind = .arrow
-    var currentColor: NSColor = .systemRed
-    var strokeWidth: CGFloat = 3.5
+    var currentColor: NSColor
+    var strokeWidth: CGFloat
     private var annotations: [Annotation] = []
     private var currentAnnotation: Annotation?
     private var undoStack: [Annotation] = []
@@ -43,19 +44,23 @@ final class UnifiedOverlayView: NSView {
     private var magnifierView: MagnifierView?
 
     // Callbacks
-    private let onFinishCapture: (NSImage, CGRect) -> Void
+    private let onFinishCapture: (NSImage, CGRect, CaptureAction) -> Void
     private let onPinCapture: (NSImage, CGRect) -> Void
     private let onCancel: () -> Void
 
     init(
         backgroundImage: CGImage,
         screenFrame: NSRect,
-        onFinishCapture: @escaping (NSImage, CGRect) -> Void,
+        initialColor: NSColor = .systemRed,
+        initialStrokeWidth: CGFloat = 3,
+        onFinishCapture: @escaping (NSImage, CGRect, CaptureAction) -> Void,
         onPinCapture: @escaping (NSImage, CGRect) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.backgroundImage = backgroundImage
         self.screenFrame = screenFrame
+        self.currentColor = initialColor
+        self.strokeWidth = initialStrokeWidth
         self.onFinishCapture = onFinishCapture
         self.onPinCapture = onPinCapture
         self.onCancel = onCancel
@@ -70,7 +75,7 @@ final class UnifiedOverlayView: NSView {
     }
 
     private func setupHUD() {
-        let hud = InPlaceHUDView { [weak self] action in
+        let hud = InPlaceHUDView(initialColor: currentColor) { [weak self] action in
             self?.handleHUDAction(action)
         }
         hud.isHidden = true
@@ -92,7 +97,7 @@ final class UnifiedOverlayView: NSView {
         // Show magnifier when no selection is made yet, or when in select mode
         if selectionRect == nil || isSelecting {
             magnifierView?.isHidden = false
-            magnifierView?.update(at: point, in: bounds, backgroundImage: backgroundImage, scale: 2.0)
+            magnifierView?.update(at: point, in: bounds, backgroundImage: backgroundImage)
         } else {
             magnifierView?.isHidden = true
         }
@@ -115,11 +120,10 @@ final class UnifiedOverlayView: NSView {
             onPinCapture(img, sel)
         case .copy:
             guard let img = renderCurrentSelectionImage(), let sel = selectionRect else { return }
-            Clipboard.copy(img)
-            onFinishCapture(img, sel)
+            onFinishCapture(img, sel, .copy)
         case .save:
             guard let img = renderCurrentSelectionImage(), let sel = selectionRect else { return }
-            onFinishCapture(img, sel)
+            onFinishCapture(img, sel, .save)
         case .cancel:
             onCancel()
         }
@@ -130,13 +134,7 @@ final class UnifiedOverlayView: NSView {
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
 
-        // 1. If HUD is clicked, don't handle here
-        if let hud = hudView, !hud.isHidden, hud.frame.contains(point) {
-            super.mouseDown(with: event)
-            return
-        }
-
-        // 2. If no selection exists yet, start dragging new selection
+        // 1. If no selection exists yet, start dragging new selection
         guard let sel = selectionRect else {
             isSelecting = true
             dragStartPoint = point
@@ -146,7 +144,7 @@ final class UnifiedOverlayView: NSView {
             return
         }
 
-        // 3. Check if clicking on a resize handle
+        // 2. Check if clicking on a resize handle
         let handle = detectHandle(at: point, in: sel)
         if handle != .none {
             activeHandle = handle
@@ -156,7 +154,7 @@ final class UnifiedOverlayView: NSView {
             return
         }
 
-        // 4. Check if moving whole selection (if spacebar or Alt or tool == .select)
+        // 3. Check if moving whole selection (if spacebar or Alt or tool == .select)
         if event.modifierFlags.contains(.option) || selectedTool == .select {
             if sel.contains(point) {
                 isMovingSelection = true
@@ -167,13 +165,13 @@ final class UnifiedOverlayView: NSView {
             }
         }
 
-        // 5. Drawing tools inside selection
+        // 4. Drawing tools inside selection
         if sel.contains(point) {
             handleDrawingMouseDown(at: point)
             return
         }
 
-        // 6. Clicked outside selection -> start new selection
+        // 5. Clicked outside selection -> start new selection
         isSelecting = true
         dragStartPoint = point
         selectionRect = CGRect(origin: point, size: .zero)
@@ -285,15 +283,19 @@ final class UnifiedOverlayView: NSView {
             needsDisplay = true
         case .text:
             activeTextView?.commit()
+            // Freeze the stroke width / font size at creation time so the committed
+            // annotation renders exactly like the edit box that is on screen.
+            let frozenStrokeWidth = strokeWidth
+            let fontSize = max(16, frozenStrokeWidth * 5)
             let textView = InPlaceTextView(
                 at: point,
                 textColor: currentColor,
-                fontSize: max(16, strokeWidth * 5),
-                onCommit: { [weak self] text in
+                fontSize: fontSize,
+                onCommit: { [weak self] text, baseline in
                     guard let self else { return }
                     let ann = Annotation(
-                        kind: .text, points: [], start: point, end: point,
-                        color: self.currentColor, strokeWidth: self.strokeWidth,
+                        kind: .text, points: [], start: baseline, end: baseline,
+                        color: self.currentColor, strokeWidth: frozenStrokeWidth,
                         text: text
                     )
                     self.annotations.append(ann)
@@ -337,19 +339,24 @@ final class UnifiedOverlayView: NSView {
     func undo() {
         guard let last = annotations.popLast() else { return }
         undoStack.append(last)
-        if last.kind == .counter && currentCounter > 1 {
-            currentCounter -= 1
-        }
+        refreshCounter()
         needsDisplay = true
     }
 
     func redo() {
         guard let last = undoStack.popLast() else { return }
         annotations.append(last)
-        if last.kind == .counter {
-            currentCounter += 1
-        }
+        refreshCounter()
         needsDisplay = true
+    }
+
+    /// Keeps the auto-incrementing step counter in sync with the badges that are
+    /// actually on the canvas (undo/redo must not leave gaps or duplicates).
+    private func refreshCounter() {
+        let highest = annotations.compactMap { annotation -> Int? in
+            annotation.kind == .counter ? annotation.count : nil
+        }.max() ?? 0
+        currentCounter = highest + 1
     }
 
     // MARK: - Handles & Selection Management
@@ -411,24 +418,29 @@ final class UnifiedOverlayView: NSView {
     private func positionHUD(for rect: CGRect) {
         guard let hud = hudView else { return }
         hud.isHidden = false
-        hud.layoutSubtreeIfNeeded()
 
-        let hudWidth: CGFloat = 680
-        let hudHeight: CGFloat = 38
+        // Use the HUD's intrinsic size instead of a hardcoded width so the toolbar
+        // can never be clipped when the tool set changes.
+        let size = hud.fittingSize
+        let hudWidth = size.width > 0 ? size.width : 680
+        let hudHeight = size.height > 0 ? size.height : 38
+
+        // Prefer placing the HUD below the selection; fall back to the top and clamp
+        // it back into the screen (a full-screen selection has no room underneath).
+        var hudY: CGFloat
+        let belowY = rect.minY - hudHeight - 10
+        if belowY >= 10 {
+            hudY = belowY
+        } else {
+            hudY = min(rect.maxY + 10, bounds.maxY - hudHeight - 10)
+            hudY = max(hudY, 10)
+        }
+
         var hudX = rect.midX - hudWidth / 2
-        var hudY = rect.minY - hudHeight - 10
-
-        // Keep HUD on-screen
-        if hudY < 10 {
-            // Place on top if bottom edge is clipped
-            hudY = rect.maxY + 10
-        }
-        if hudX < 10 { hudX = 10 }
-        if hudX + hudWidth > bounds.width - 10 {
-            hudX = bounds.width - hudWidth - 10
-        }
+        hudX = max(10, min(hudX, bounds.maxX - hudWidth - 10))
 
         hud.frame = CGRect(x: hudX, y: hudY, width: hudWidth, height: hudHeight)
+        hud.layoutSubtreeIfNeeded()
     }
 
     // MARK: - Drawing
@@ -667,13 +679,18 @@ final class UnifiedOverlayView: NSView {
 
         guard let cropped = backgroundImage.cropping(to: cropRect) else { return }
 
+        // `cropped` is already the cropped image, so its own coordinate space starts
+        // at the origin — sampling from `cropRect` (which carries a non-zero origin)
+        // would address a region outside the image and render nothing.
+        let sourceRect = CGRect(x: 0, y: 0, width: CGFloat(cropped.width), height: CGFloat(cropped.height))
+
         if ann.kind == .blur {
             let blurFilter = CIFilter(name: "CIGaussianBlur")
             blurFilter?.setValue(CIImage(cgImage: cropped), forKey: kCIInputImageKey)
             blurFilter?.setValue(12, forKey: kCIInputRadiusKey)
             if let output = blurFilter?.outputImage {
                 let ciContext = CIContext(cgContext: context, options: nil)
-                ciContext.draw(output, in: rect, from: cropRect)
+                ciContext.draw(output, in: rect, from: sourceRect)
             }
         } else {
             let smallWidth = max(1, Int(rect.width / 8))
@@ -687,8 +704,10 @@ final class UnifiedOverlayView: NSView {
             smallContext.interpolationQuality = .none
             smallContext.draw(cropped, in: CGRect(x: 0, y: 0, width: smallWidth, height: smallHeight))
             guard let smallImage = smallContext.makeImage() else { return }
+            context.saveGState()
             context.interpolationQuality = .none
             context.draw(smallImage, in: rect)
+            context.restoreGState()
         }
     }
 
@@ -766,14 +785,13 @@ final class UnifiedOverlayView: NSView {
 
     @objc private func contextCopyAction() {
         if let img = renderCurrentSelectionImage(), let sel = selectionRect {
-            Clipboard.copy(img)
-            onFinishCapture(img, sel)
+            onFinishCapture(img, sel, .copy)
         }
     }
 
     @objc private func contextSaveAction() {
         if let img = renderCurrentSelectionImage(), let sel = selectionRect {
-            onFinishCapture(img, sel)
+            onFinishCapture(img, sel, .save)
         }
     }
 
@@ -827,15 +845,9 @@ final class UnifiedOverlayView: NSView {
         ctx.scaleBy(x: scaleX, y: scaleY)
         ctx.translateBy(x: -sel.origin.x, y: -sel.origin.y)
 
-        NSGraphicsContext.saveGraphicsState()
-        let nsCtx = NSGraphicsContext(cgContext: ctx, flipped: false)
-        NSGraphicsContext.current = nsCtx
-
         for ann in annotations {
             drawAnnotation(ann, in: ctx)
         }
-
-        NSGraphicsContext.restoreGraphicsState()
 
         guard let finalCG = ctx.makeImage() else { return nil }
         return NSImage(cgImage: finalCG, size: sel.size)
@@ -914,13 +926,12 @@ final class UnifiedOverlayView: NSView {
 
     private func triggerCopy() {
         guard let img = renderCurrentSelectionImage(), let sel = selectionRect else { return }
-        Clipboard.copy(img)
-        onFinishCapture(img, sel)
+        onFinishCapture(img, sel, .copy)
     }
 
     private func triggerSave() {
         guard let img = renderCurrentSelectionImage(), let sel = selectionRect else { return }
-        onFinishCapture(img, sel)
+        onFinishCapture(img, sel, .save)
     }
 
     private func triggerPin() {

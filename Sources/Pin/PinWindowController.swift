@@ -1,13 +1,11 @@
 import AppKit
 
 /// Floating, always-on-top, draggable, zoomable window for pinning screenshots to desktop.
-final class PinWindowController: NSWindowController {
-    private let pinnedImage: NSImage
-    private var currentScale: CGFloat = 1.0
+final class PinWindowController: NSWindowController, NSWindowDelegate {
+    /// Called when the pinned window is closed, so the owner can drop its reference.
+    var onClosed: (() -> Void)?
 
     init(image: NSImage, at origin: CGPoint) {
-        self.pinnedImage = image
-
         let initialSize = image.size
         let contentRect = NSRect(origin: origin, size: initialSize)
 
@@ -23,18 +21,26 @@ final class PinWindowController: NSWindowController {
         window.hasShadow = true
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = true
+        // The controller owns the window — closing it must not release it while the
+        // window is still handling the event that triggered the close.
+        window.isReleasedWhenClosed = false
 
         let view = PinImageView(image: image) { [weak window] in
-            window?.orderOut(nil)
+            window?.close()
         }
         window.contentView = view
 
         super.init(window: window)
+        window.delegate = self
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        onClosed?()
     }
 
     func show() {
@@ -51,7 +57,7 @@ private final class PinWindow: NSWindow {
     override func keyDown(with event: NSEvent) {
         // Esc closes the pinned window
         if event.keyCode == 53 { // ESC
-            orderOut(nil)
+            close()
         } else {
             super.keyDown(with: event)
         }

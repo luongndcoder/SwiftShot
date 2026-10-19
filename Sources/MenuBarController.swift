@@ -5,7 +5,8 @@ import SwiftUI
 @MainActor
 final class MenuBarController {
     private var statusItem: NSStatusItem?
-    private var appState: AppState?
+    /// Weak to avoid a retain cycle with `AppState` (which owns this controller).
+    private weak var appState: AppState?
     private var settingsWindow: NSWindow?
 
     private var permissionIndicator: NSMenuItem?
@@ -44,16 +45,17 @@ final class MenuBarController {
         panel.hasShadow = true
 
         let label = NSTextField(labelWithString: message)
-        label.frame = panel.contentView!.bounds.insetBy(dx: 12, dy: 8)
         label.alignment = .center
         label.textColor = isError ? .systemRed : .labelColor
         label.autoresizingMask = [.width, .height]
         panel.contentView?.addSubview(label)
+        label.frame = (panel.contentView?.bounds ?? panel.frame).insetBy(dx: 12, dy: 8)
 
         // Position near the status item, above the menu bar.
         if let button = statusItem?.button, let window = button.window {
-            let screen = window.screen ?? NSScreen.main!
-            let frame = NSRect(x: window.frame.midX - 130, y: screen.frame.maxY - 70, width: 260, height: 44)
+            let screen = window.screen ?? NSScreen.main
+            let originY = (screen?.frame.maxY ?? 0) - 70
+            let frame = NSRect(x: window.frame.midX - 130, y: originY, width: 260, height: 44)
             panel.setFrame(frame, display: true)
         }
         panel.orderFrontRegardless()
@@ -117,8 +119,10 @@ final class MenuBarController {
             return
         }
 
-        let hostingView = NSHostingView(rootView: SettingsView())
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 320),
+        guard let settings = appState?.settings else { return }
+
+        let hostingView = NSHostingView(rootView: SettingsView(settings: settings))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 380),
                              styleMask: [.titled, .closable, .miniaturizable],
                              backing: .buffered, defer: false)
         window.title = "SwiftShot Settings"

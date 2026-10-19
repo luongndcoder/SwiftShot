@@ -2,6 +2,10 @@ import AppKit
 import Combine
 
 /// User settings persisted via UserDefaults.
+///
+/// This is the single source of truth for user preferences: the SwiftUI settings
+/// panel observes this object directly instead of duplicating the values with
+/// `@AppStorage`.
 final class Settings: ObservableObject {
     private enum Key {
         static let hotkeyKeyCombo = "hotkeyKeyCombo"
@@ -12,8 +16,11 @@ final class Settings: ObservableObject {
         static let strokeWidth = "strokeWidth"
     }
 
-    /// Current global hotkey, defaults to ⇧⌘4 (Command + Shift + 4) like native macOS region screenshot.
-    @Published var hotkey: KeyCombo = .init(key: .four, modifiers: [.shift, .command]) {
+    /// Default global hotkey: ⇧⌘4 (Command + Shift + 4), same as the native macOS region capture.
+    static let defaultHotkey = KeyCombo(keyCode: KeyCodeTable.four, modifiers: [.shift, .command])
+
+    /// Current global hotkey.
+    @Published var hotkey: KeyCombo = Settings.defaultHotkey {
         didSet { defaults.set(hotkey.rawValue, forKey: Key.hotkeyKeyCombo) }
     }
     @Published var autoSave: Bool = false {
@@ -41,6 +48,10 @@ final class Settings: ObservableObject {
     init() {
         if let raw = defaults.string(forKey: Key.hotkeyKeyCombo), let combo = KeyCombo(rawValue: raw) {
             hotkey = combo
+        } else {
+            // No (or an outdated, unparsable) stored value — fall back to the default
+            // and normalise the stored representation.
+            defaults.set(hotkey.rawValue, forKey: Key.hotkeyKeyCombo)
         }
         autoSave = defaults.bool(forKey: Key.autoSave)
         if let path = defaults.string(forKey: Key.saveDirectory) {
@@ -57,82 +68,58 @@ final class Settings: ObservableObject {
 
 // MARK: - KeyCombo
 
+/// A keyboard shortcut expressed as a virtual key code + modifier flags.
 struct KeyCombo: Equatable {
-    var key: KeyCode
+    var keyCode: UInt16
     var modifiers: NSEvent.ModifierFlags
 
     var rawValue: String {
-        "\(key.rawValue)||\(modifiers.rawValue)"
+        "\(keyCode)||\(modifiers.rawValue)"
     }
 
-    init(key: KeyCode, modifiers: NSEvent.ModifierFlags) {
-        self.key = key
+    init(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
+        self.keyCode = keyCode
         self.modifiers = modifiers
     }
 
     init?(rawValue: String) {
         let parts = rawValue.components(separatedBy: "||")
-        guard parts.count == 2, let key = KeyCode(rawValue: parts[0]),
+        guard parts.count == 2,
+              let code = UInt16(parts[0]),
               let raw = UInt(parts[1]) else { return nil }
-        self.key = key
+        self.keyCode = code
         self.modifiers = NSEvent.ModifierFlags(rawValue: raw)
     }
 
     var displayString: String {
-        modifiers.displayString + key.displayString
+        modifiers.displayString + KeyCodeTable.displayName(for: keyCode)
     }
 }
 
-enum KeyCode: String {
-    case one = "1", two = "2", three = "3", four = "4", five = "5"
-    case a, b, c, d, e, f, g, h, i, j, k, l, m
-    case n, o, p, q, r, s, t, u, v, w, x, y, z
+// MARK: - Key code names
 
-    var keyCode: UInt16 {
-        switch self {
-        case .one: return 0x12
-        case .two: return 0x13
-        case .three: return 0x14
-        case .four: return 0x15
-        case .five: return 0x17
-        case .a: return 0x00
-        case .b: return 0x0B
-        case .c: return 0x08
-        case .d: return 0x02
-        case .e: return 0x0E
-        case .f: return 0x03
-        case .g: return 0x05
-        case .h: return 0x04
-        case .i: return 0x22
-        case .j: return 0x26
-        case .k: return 0x28
-        case .l: return 0x25
-        case .m: return 0x2E
-        case .n: return 0x2D
-        case .o: return 0x1F
-        case .p: return 0x23
-        case .q: return 0x0C
-        case .r: return 0x0F
-        case .s: return 0x01
-        case .t: return 0x11
-        case .u: return 0x20
-        case .v: return 0x09
-        case .w: return 0x0D
-        case .x: return 0x07
-        case .y: return 0x10
-        case .z: return 0x06
-        }
-    }
+/// Maps macOS virtual key codes to human readable names (used by the hotkey recorder).
+enum KeyCodeTable {
+    static let four: UInt16 = 0x15  // "4"
 
-    var displayString: String {
-        switch self {
-        case .one: return "1"
-        case .two: return "2"
-        case .three: return "3"
-        case .four: return "4"
-        case .five: return "5"
-        default: return rawValue.uppercased()
-        }
+    /// Key codes of the modifier keys themselves — used to ignore modifier-only presses.
+    static let modifierKeyCodes: Set<UInt16> = [55, 56, 57, 58, 59, 60, 61, 62, 63]
+
+    private static let names: [UInt16: String] = [
+        0x00: "A", 0x01: "S", 0x02: "D", 0x03: "F", 0x04: "H", 0x05: "G", 0x06: "Z", 0x07: "X",
+        0x08: "C", 0x09: "V", 0x0B: "B", 0x0C: "Q", 0x0D: "W", 0x0E: "E", 0x0F: "R",
+        0x10: "Y", 0x11: "T", 0x12: "1", 0x13: "2", 0x14: "3", 0x15: "4", 0x16: "6",
+        0x17: "5", 0x18: "=", 0x19: "9", 0x1A: "7", 0x1B: "-", 0x1C: "8", 0x1D: "0",
+        0x1E: "]", 0x1F: "O", 0x20: "U", 0x21: "[", 0x22: "I", 0x23: "P", 0x25: "L",
+        0x26: "J", 0x27: "'", 0x28: "K", 0x29: ";", 0x2A: "\\", 0x2B: ",", 0x2C: "/",
+        0x2D: "N", 0x2E: "M", 0x2F: ".", 0x30: "Tab", 0x31: "Space", 0x32: "`",
+        0x33: "Delete", 0x35: "Esc", 0x36: "F5", 0x37: "F4", 0x38: "F3", 0x39: "F2",
+        0x40: "F1", 0x41: "→", 0x42: "←", 0x43: "↓", 0x44: "↑", 0x4A: "F6",
+        0x4B: "F7", 0x4C: "F8", 0x4D: "F9", 0x4E: "F10", 0x4F: "F11", 0x50: "F12"
+    ]
+
+    static func displayName(for keyCode: UInt16) -> String {
+        names[keyCode] ?? "Key \(keyCode)"
     }
 }
 

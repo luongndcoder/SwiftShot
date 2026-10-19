@@ -2,7 +2,7 @@ import AppKit
 import CoreGraphics
 
 /// Floating in-place HUD toolbar positioned directly outside the selection rectangle.
-/// Contains tool buttons, color indicators, undo, pin, copy, and save buttons.
+/// Contains tool buttons, color indicators, undo, redo, pin, copy, save and cancel.
 final class InPlaceHUDView: NSView {
     enum Action {
         case selectTool(Annotation.Kind)
@@ -18,9 +18,10 @@ final class InPlaceHUDView: NSView {
     private let onAction: (Action) -> Void
     private var toolButtons: [Annotation.Kind: NSButton] = [:]
     private var currentTool: Annotation.Kind = .arrow
-    private var currentColor: NSColor = .systemRed
+    private var currentColor: NSColor
 
-    init(onAction: @escaping (Action) -> Void) {
+    init(initialColor: NSColor = .systemRed, onAction: @escaping (Action) -> Void) {
+        self.currentColor = initialColor
         self.onAction = onAction
         super.init(frame: .zero)
         setupUI()
@@ -99,6 +100,11 @@ final class InPlaceHUDView: NSView {
             self?.onAction(.undo)
         }
         mainStack.addArrangedSubview(undoBtn)
+
+        let redoBtn = createIconButton(systemName: "arrow.uturn.forward", tooltip: "Redo (⇧⌘Z)") { [weak self] in
+            self?.onAction(.redo)
+        }
+        mainStack.addArrangedSubview(redoBtn)
 
         let pinBtn = createIconButton(systemName: "pin.fill", tooltip: "Pin to Screen (⌘P)") { [weak self] in
             self?.onAction(.pin)

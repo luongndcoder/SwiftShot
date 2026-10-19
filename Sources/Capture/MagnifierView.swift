@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import CoreImage
 
 /// Floating magnifying glass loupe showing 4x zoomed pixels and RGB/HEX color inspection.
 final class MagnifierView: NSView {
@@ -8,11 +9,16 @@ final class MagnifierView: NSView {
     private var hexText: String = ""
     private var currentColor: NSColor = .black
 
+    /// Reused CoreImage context for sampling a single pixel (cheap, no full-image copies).
+    private let ciContext = CIContext(options: nil)
+    private let sampleColorSpace = CGColorSpaceCreateDeviceRGB()
+
     override init(frame: NSRect) {
         super.init(frame: NSRect(x: 0, y: 0, width: 140, height: 160))
         wantsLayer = true
         layer?.cornerRadius = 10
-        layer?.masksToBounds = true
+        // NOTE: `masksToBounds` is intentionally NOT set — it would clip the drop shadow.
+        // The zoomed image is rounded by the clip path inside `draw(_:)`.
         layer?.backgroundColor = NSColor(calibratedWhite: 0.1, alpha: 0.95).cgColor
         layer?.borderColor = NSColor.white.withAlphaComponent(0.3).cgColor
         layer?.borderWidth = 1.5
@@ -26,11 +32,12 @@ final class MagnifierView: NSView {
         fatalError("init(coder:) is not supported")
     }
 
-    func update(at point: CGPoint, in bounds: CGRect, backgroundImage: CGImage, scale: CGFloat) {
+    func update(at point: CGPoint, in bounds: CGRect, backgroundImage: CGImage) {
         let sampleSize: CGFloat = 24
         let bgW = CGFloat(backgroundImage.width)
         let bgH = CGFloat(backgroundImage.height)
 
+        // The view uses a bottom-left origin while the bitmap uses a top-left one.
         let pixelX = (point.x / bounds.width) * bgW
         let pixelY = ((bounds.height - point.y) / bounds.height) * bgH
 
@@ -42,21 +49,7 @@ final class MagnifierView: NSView {
         )
 
         self.pixelImage = backgroundImage.cropping(to: cropRect)
-
-        if let crop = self.pixelImage,
-           let data = crop.dataProvider?.data,
-           let ptr = CFDataGetBytePtr(data) {
-            let cx = Int(sampleSize / 2)
-            let cy = Int(sampleSize / 2)
-            let bpr = crop.bytesPerRow
-            let offset = cy * bpr + cx * 4
-            let r = ptr[offset]
-            let g = ptr[offset + 1]
-            let b = ptr[offset + 2]
-            self.currentColor = NSColor(red: CGFloat(r)/255.0, green: CGFloat(g)/255.0, blue: CGFloat(b)/255.0, alpha: 1.0)
-            self.colorText = "RGB: \(r), \(g), \(b)"
-            self.hexText = String(format: "#%02X%02X%02X", r, g, b)
-        }
+        sampleCenterColor(of: self.pixelImage)
 
         var mx = point.x + 20
         var my = point.y - 180
@@ -65,6 +58,39 @@ final class MagnifierView: NSView {
         self.frame = NSRect(x: mx, y: my, width: 140, height: 160)
 
         needsDisplay = true
+    }
+
+    /// Reads the centre pixel of the (already cropped) sample image.
+    ///
+    /// The screen capture is delivered as **BGRA** by ScreenCaptureKit, so reading the
+    /// raw bytes directly would swap red and blue. Going through CoreImage returns
+    /// canonical RGBA regardless of the source layout.
+    private func sampleCenterColor(of image: CGImage?) {
+        guard let image else { return }
+
+        let ciImage = CIImage(cgImage: image)
+        let width = image.width
+        let height = image.height
+        let cx = width / 2
+        let cy = height / 2
+
+        var pixel = [UInt8](repeating: 0, count: 4)
+        ciContext.render(
+            ciImage,
+            toBitmap: &pixel,
+            rowBytes: 4,
+            // CoreImage's coordinate space is bottom-left based, the bitmap's is top-left.
+            bounds: CGRect(x: cx, y: height - 1 - cy, width: 1, height: 1),
+            format: .RGBA8,
+            colorSpace: sampleColorSpace
+        )
+
+        let r = pixel[0]
+        let g = pixel[1]
+        let b = pixel[2]
+        self.currentColor = NSColor(red: CGFloat(r) / 255.0, green: CGFloat(g) / 255.0, blue: CGFloat(b) / 255.0, alpha: 1.0)
+        self.colorText = "RGB: \(r), \(g), \(b)"
+        self.hexText = String(format: "#%02X%02X%02X", r, g, b)
     }
 
     override func draw(_ dirtyRect: NSRect) {

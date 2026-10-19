@@ -50,11 +50,12 @@
   - `Command + Shift + 4` (`⇧⌘4`): Activate capture
   - `Command + C` / `Enter`: Copy screenshot directly to Clipboard
   - `Command + S`: Save PNG to `~/Pictures/SwiftShot/`
+  - `Command + P`: Pin screenshot to the desktop
   - `Command + Z` / `Shift + Command + Z`: Undo / Redo
   - `Esc`: Cancel capture
   - `Arrow Keys`: Nudge selection by 1px (`Shift + Arrows` to resize by 1px)
   - `Mouse Wheel`: Scroll to instantly increase/decrease tool stroke thickness
-- **🔒 Stable TCC Permissions**: Signs with a persistent developer signature so macOS Screen Recording permission is granted **only once** and never lost on rebuilds.
+- **🔒 Stable TCC Permissions**: Signs with a persistent developer signature (Apple Development certificate) so the macOS Screen Recording permission is granted **only once** and is not lost on rebuilds. Without such a certificate `install.sh` falls back to ad-hoc signing and macOS will ask for the permission again after every rebuild.
 
 ### 📊 RAM Comparison
 
@@ -100,6 +101,23 @@ Press **⌘R** to run.
    - Go to **System Settings** → **Keyboard** → **Keyboard Shortcuts...** → **Screenshots**.
    - **Uncheck** *Save picture of selected area as a file* (`⇧⌘4`).
    - Now pressing **`Command + Shift + 4`** will instantly trigger SwiftShot!
+
+---
+
+### ⚙️ Preferences
+
+Open **Settings…** from the menu bar icon:
+
+| Setting | Description |
+| :--- | :--- |
+| **Global Hotkey** | Click **Record** and press the combination you want (⌘ / ⌃ / ⌥ required). The change is applied immediately. |
+| **Also copy to clipboard after capture** | Copies the result to the clipboard in addition to the action you picked. |
+| **Also auto-save to folder** | Writes a PNG into the save folder in addition to the action you picked. |
+| **Save folder** | Defaults to `~/Pictures/SwiftShot`. Use **Choose…** to pick another directory. |
+| **Default Color** | The color preselected for new annotations. |
+| **Stroke width** | The default stroke width of new annotations (1–20). |
+
+> **Copy vs. Save**: the **Copy** button (or `⌘C` / `Enter`) copies to the clipboard, the **Save** button (or `⌘S`) writes a PNG file to the save folder. The two "Also…" toggles let you get both at once.
 
 ---
 

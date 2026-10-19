@@ -10,14 +10,16 @@ private final class OverlayWindow: NSWindow {
 final class ScreenshotOverlayController {
     private var window: NSWindow?
     private var eventMonitor: Any?
-    private var onComplete: (NSImage, CGRect) -> Void
+    private var onComplete: (NSImage, CGRect, CaptureAction) -> Void
     private var onPin: (NSImage, CGRect) -> Void
     private var onCancel: () -> Void
 
     init(
         backgroundImage: CGImage,
         screen: NSScreen,
-        onComplete: @escaping (NSImage, CGRect) -> Void,
+        initialColor: NSColor = .systemRed,
+        initialStrokeWidth: CGFloat = 3,
+        onComplete: @escaping (NSImage, CGRect, CaptureAction) -> Void,
         onPin: @escaping (NSImage, CGRect) -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -28,8 +30,10 @@ final class ScreenshotOverlayController {
         let overlayView = UnifiedOverlayView(
             backgroundImage: backgroundImage,
             screenFrame: screen.frame,
-            onFinishCapture: { [weak self] image, rect in
-                self?.finish(image: image, rect: rect)
+            initialColor: initialColor,
+            initialStrokeWidth: initialStrokeWidth,
+            onFinishCapture: { [weak self] image, rect, action in
+                self?.finish(image: image, rect: rect, action: action)
             },
             onPinCapture: { [weak self] image, rect in
                 self?.pin(image: image, rect: rect)
@@ -92,9 +96,9 @@ final class ScreenshotOverlayController {
         window = nil
     }
 
-    private func finish(image: NSImage, rect: CGRect) {
+    private func finish(image: NSImage, rect: CGRect, action: CaptureAction) {
         close()
-        onComplete(image, rect)
+        onComplete(image, rect, action)
     }
 
     private func pin(image: NSImage, rect: CGRect) {
