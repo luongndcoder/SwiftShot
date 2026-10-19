@@ -510,20 +510,26 @@ final class UnifiedOverlayView: NSView {
 
     private func drawSizeLabel(for rect: CGRect, in context: CGContext) {
         let label = "\(Int(rect.width)) × \(Int(rect.height))"
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: NSColor.white
+        let font = CTFontCreateWithName("Menlo-Bold" as CFString, 11, nil)
+        let attrs: [CFString: Any] = [
+            kCTFontAttributeName: font,
+            kCTForegroundColorAttributeName: NSColor.white.cgColor
         ]
-        let attrString = NSAttributedString(string: label, attributes: attrs)
-        let textSize = attrString.size()
-        let labelRect = CGRect(x: rect.minX, y: rect.maxY + 4, width: textSize.width + 12, height: textSize.height + 4)
+        let attrString = CFAttributedStringCreate(kCFAllocatorDefault, label as CFString, attrs as CFDictionary)!
+        let line = CTLineCreateWithAttributedString(attrString)
+        let bounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
+
+        let labelRect = CGRect(x: rect.minX, y: rect.maxY + 4, width: bounds.width + 14, height: bounds.height + 8)
 
         context.setFillColor(NSColor(calibratedWhite: 0.1, alpha: 0.85).cgColor)
         let path = CGPath(roundedRect: labelRect, cornerWidth: 4, cornerHeight: 4, transform: nil)
         context.addPath(path)
         context.fillPath()
 
-        attrString.draw(at: CGPoint(x: labelRect.minX + 6, y: labelRect.minY + 2))
+        context.saveGState()
+        context.textPosition = CGPoint(x: labelRect.minX + 7, y: labelRect.minY + 4)
+        CTLineDraw(line, context)
+        context.restoreGState()
     }
 
     private func drawAnnotation(_ ann: Annotation, in context: CGContext) {
@@ -629,16 +635,21 @@ final class UnifiedOverlayView: NSView {
         context.setLineWidth(1.5)
         context.strokeEllipse(in: badgeRect)
 
-        // Number text
+        // Number text via CoreText
         let str = "\(count)"
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.boldSystemFont(ofSize: 13),
-            .foregroundColor: NSColor.white
+        let font = CTFontCreateWithName("Helvetica-Bold" as CFString, 13, nil)
+        let attrs: [CFString: Any] = [
+            kCTFontAttributeName: font,
+            kCTForegroundColorAttributeName: NSColor.white.cgColor
         ]
-        let attrStr = NSAttributedString(string: str, attributes: attrs)
-        let textSize = attrStr.size()
-        let textPoint = CGPoint(x: point.x - textSize.width / 2, y: point.y - textSize.height / 2)
-        attrStr.draw(at: textPoint)
+        let attrStr = CFAttributedStringCreate(kCFAllocatorDefault, str as CFString, attrs as CFDictionary)!
+        let line = CTLineCreateWithAttributedString(attrStr)
+        let lineBounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
+
+        context.saveGState()
+        context.textPosition = CGPoint(x: point.x - lineBounds.width / 2, y: point.y - lineBounds.height / 2 + 1)
+        CTLineDraw(line, context)
+        context.restoreGState()
     }
 
     private func drawBlurOrPixelate(ann: Annotation, in context: CGContext) {

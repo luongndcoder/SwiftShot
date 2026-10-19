@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0CA0AE037EB408E7157A3843 /* TextInputWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AFBD96AF29FB3E311A95F22 /* TextInputWindow.swift */; };
 		2AE2B6009A3595CD4694E750 /* FileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49089FA02B979C70A0E3A1FD /* FileStore.swift */; };
 		2C0C84E2B63625F33D5A6672 /* MenuIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = 40E9F218AF34EDED8FCA53FE /* MenuIcon.png */; };
 		54B5756073E84AEE2E29D8C1 /* InPlaceHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97404704433213ADA81D6B34 /* InPlaceHUDView.swift */; };
@@ -34,7 +33,6 @@
 		0E10D65E039062D55B58A0FA /* MagnifierView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MagnifierView.swift; sourceTree = "<group>"; };
 		154625D6BA531DEFB127C1C6 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		1ABCAF4573E832189246CA4F /* SwiftShotApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftShotApp.swift; sourceTree = "<group>"; };
-		1AFBD96AF29FB3E311A95F22 /* TextInputWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInputWindow.swift; sourceTree = "<group>"; };
 		40AC59810C3275E453B24D60 /* UnifiedOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedOverlayView.swift; sourceTree = "<group>"; };
 		40E9F218AF34EDED8FCA53FE /* MenuIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = MenuIcon.png; sourceTree = "<group>"; };
 		49089FA02B979C70A0E3A1FD /* FileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileStore.swift; sourceTree = "<group>"; };
@@ -70,7 +68,6 @@
 			isa = PBXGroup;
 			children = (
 				5233A3F4B0BB7F4C984B8DE9 /* AnnotationTool.swift */,
-				1AFBD96AF29FB3E311A95F22 /* TextInputWindow.swift */,
 			);
 			path = Editor;
 			sourceTree = "<group>";
@@ -232,7 +229,6 @@
 				D4914B21419604CF9748B699 /* Settings.swift in Sources */,
 				E89579E60A998E4B07EF2A57 /* SettingsView.swift in Sources */,
 				D8DA6D8A2A41A2B34A383F27 /* SwiftShotApp.swift in Sources */,
-				0CA0AE037EB408E7157A3843 /* TextInputWindow.swift in Sources */,
 				B767903B71036BB046FBBB91 /* UnifiedOverlayView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
