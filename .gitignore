@@ -1,0 +1,14 @@
+# Xcode
+.build/
+.build-release/
+.build-test/
+DerivedData/
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+*.xcuserdatad/
+*.DS_Store
+.DS_Store
+
+# User generated
+*.png.backup
+/tmp/
