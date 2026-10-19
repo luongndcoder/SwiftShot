@@ -9,10 +9,6 @@ final class MagnifierView: NSView {
     private var hexText: String = ""
     private var currentColor: NSColor = .black
 
-    /// Reused CoreImage context for sampling a single pixel (cheap, no full-image copies).
-    private let ciContext = CIContext(options: nil)
-    private let sampleColorSpace = CGColorSpaceCreateDeviceRGB()
-
     override init(frame: NSRect) {
         super.init(frame: NSRect(x: 0, y: 0, width: 140, height: 160))
         wantsLayer = true
@@ -61,34 +57,17 @@ final class MagnifierView: NSView {
     }
 
     /// Reads the centre pixel of the (already cropped) sample image.
-    ///
-    /// The screen capture is delivered as **BGRA** by ScreenCaptureKit, so reading the
-    /// raw bytes directly would swap red and blue. Going through CoreImage returns
-    /// canonical RGBA regardless of the source layout.
     private func sampleCenterColor(of image: CGImage?) {
         guard let image else { return }
 
-        let ciImage = CIImage(cgImage: image)
         let width = image.width
         let height = image.height
-        let cx = width / 2
-        let cy = height / 2
+        guard let color = PixelSampler.color(in: image, at: CGPoint(x: width / 2, y: height / 2)) else { return }
 
-        var pixel = [UInt8](repeating: 0, count: 4)
-        ciContext.render(
-            ciImage,
-            toBitmap: &pixel,
-            rowBytes: 4,
-            // CoreImage's coordinate space is bottom-left based, the bitmap's is top-left.
-            bounds: CGRect(x: cx, y: height - 1 - cy, width: 1, height: 1),
-            format: .RGBA8,
-            colorSpace: sampleColorSpace
-        )
-
-        let r = pixel[0]
-        let g = pixel[1]
-        let b = pixel[2]
-        self.currentColor = NSColor(red: CGFloat(r) / 255.0, green: CGFloat(g) / 255.0, blue: CGFloat(b) / 255.0, alpha: 1.0)
+        let r = Int((color.redComponent * 255).rounded())
+        let g = Int((color.greenComponent * 255).rounded())
+        let b = Int((color.blueComponent * 255).rounded())
+        self.currentColor = color
         self.colorText = "RGB: \(r), \(g), \(b)"
         self.hexText = String(format: "#%02X%02X%02X", r, g, b)
     }

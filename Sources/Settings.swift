@@ -14,6 +14,16 @@ final class Settings: ObservableObject {
         static let copyToClipboard = "copyToClipboard"
         static let defaultColor = "defaultColor"
         static let strokeWidth = "strokeWidth"
+        static let saveFormat = "saveFormat"
+        static let jpegQuality = "jpegQuality"
+        static let askWhereToSave = "askWhereToSave"
+        static let copyPathAfterSave = "copyPathAfterSave"
+        static let copyOnDoubleClick = "copyOnDoubleClick"
+        static let useLastRegion = "useLastRegion"
+        static let lastRegion = "lastRegion"
+        static let customColors = "customColors"
+        static let showMagnifier = "showMagnifier"
+        static let selectionOpacity = "selectionOpacity"
     }
 
     /// Default global hotkey: ⇧⌘4 (Command + Shift + 4), same as the native macOS region capture.
@@ -43,6 +53,74 @@ final class Settings: ObservableObject {
         didSet { defaults.set(strokeWidth, forKey: Key.strokeWidth) }
     }
 
+    // MARK: - Saving
+
+    /// File format used for saved screenshots.
+    @Published var saveFormat: SaveFormat = .png {
+        didSet { defaults.set(saveFormat.rawValue, forKey: Key.saveFormat) }
+    }
+
+    /// JPEG quality (0.1 – 1.0), only relevant for the JPEG format.
+    @Published var jpegQuality: Double = 0.9 {
+        didSet { defaults.set(jpegQuality, forKey: Key.jpegQuality) }
+    }
+
+    /// When enabled the save panel is shown instead of writing to `saveDirectory`.
+    @Published var askWhereToSave: Bool = false {
+        didSet { defaults.set(askWhereToSave, forKey: Key.askWhereToSave) }
+    }
+
+    /// Copies the path of the saved file to the clipboard.
+    @Published var copyPathAfterSave: Bool = false {
+        didSet { defaults.set(copyPathAfterSave, forKey: Key.copyPathAfterSave) }
+    }
+
+    // MARK: - Capture behaviour
+
+    /// Double clicking inside the selection copies it and finishes the capture.
+    @Published var copyOnDoubleClick: Bool = true {
+        didSet { defaults.set(copyOnDoubleClick, forKey: Key.copyOnDoubleClick) }
+    }
+
+    /// Reuses the last selection rectangle for the next capture.
+    @Published var useLastRegion: Bool = false {
+        didSet { defaults.set(useLastRegion, forKey: Key.useLastRegion) }
+    }
+
+    /// The last selection rectangle in screen coordinates.
+    @Published var lastRegion: CGRect? {
+        didSet {
+            if let lastRegion {
+                defaults.set(Self.encode(lastRegion), forKey: Key.lastRegion)
+            } else {
+                defaults.removeObject(forKey: Key.lastRegion)
+            }
+        }
+    }
+
+    // MARK: - Appearance
+
+    /// User defined colour presets shown in the toolbar next to the default palette.
+    @Published var customColors: [NSColor] = [] {
+        didSet {
+            let data = try? NSKeyedArchiver.archivedData(
+                withRootObject: customColors,
+                requiringSecureCoding: false
+            )
+            defaults.set(data, forKey: Key.customColors)
+        }
+    }
+
+    /// Shows the pixel magnifier while selecting a region.
+    @Published var showMagnifier: Bool = true {
+        didSet { defaults.set(showMagnifier, forKey: Key.showMagnifier) }
+    }
+
+    /// Opacity of the dimmed area outside of the selection (0 – 1).
+    @Published var selectionOpacity: Double = 0.35 {
+        didSet { defaults.set(selectionOpacity, forKey: Key.selectionOpacity) }
+    }
+
     private let defaults = UserDefaults.standard
 
     init() {
@@ -63,6 +141,37 @@ final class Settings: ObservableObject {
             defaultColor = color
         }
         strokeWidth = defaults.object(forKey: Key.strokeWidth) as? Double ?? 3
+        if let raw = defaults.string(forKey: Key.saveFormat), let format = SaveFormat(rawValue: raw) {
+            saveFormat = format
+        }
+        jpegQuality = defaults.object(forKey: Key.jpegQuality) as? Double ?? 0.9
+        askWhereToSave = defaults.bool(forKey: Key.askWhereToSave)
+        copyPathAfterSave = defaults.bool(forKey: Key.copyPathAfterSave)
+        copyOnDoubleClick = defaults.object(forKey: Key.copyOnDoubleClick) as? Bool ?? true
+        useLastRegion = defaults.bool(forKey: Key.useLastRegion)
+        if let raw = defaults.string(forKey: Key.lastRegion), let rect = Self.decode(raw) {
+            lastRegion = rect
+        }
+        if let data = defaults.data(forKey: Key.customColors),
+           let colors = try? NSKeyedUnarchiver.unarchivedArrayOfObjects(ofClass: NSColor.self, from: data) {
+            customColors = colors
+        }
+        showMagnifier = defaults.object(forKey: Key.showMagnifier) as? Bool ?? true
+        selectionOpacity = defaults.object(forKey: Key.selectionOpacity) as? Double ?? 0.35
+    }
+
+    // MARK: - Region coding
+
+    private static func encode(_ rect: CGRect) -> String {
+        "\(rect.origin.x)|\(rect.origin.y)|\(rect.size.width)|\(rect.size.height)"
+    }
+
+    private static func decode(_ raw: String) -> CGRect? {
+        let parts = raw.components(separatedBy: "|")
+        guard parts.count == 4,
+              let x = Double(parts[0]), let y = Double(parts[1]),
+              let w = Double(parts[2]), let h = Double(parts[3]) else { return nil }
+        return CGRect(x: x, y: y, width: w, height: h)
     }
 }
 

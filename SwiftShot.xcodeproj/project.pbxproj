@@ -16,6 +16,7 @@
 		7C14BE131A5AD67F0B0B5BC3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5740C6254FD9CD4F604E8FF6 /* Assets.xcassets */; };
 		7FC62640BD932CCAE7CAB0C7 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 154625D6BA531DEFB127C1C6 /* AppIcon.icns */; };
 		812DE03FEC2C3F9431694A96 /* ScreenshotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68F46D58A4CFF5D3AC9F2E3B /* ScreenshotService.swift */; };
+		828C9D7249AE8BB7CFDE805A /* PixelSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = F19E7B5D18752BA41F200D31 /* PixelSampler.swift */; };
 		8E7542E223EA73E200541D6D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A3066F3DA8C66DF731946B9 /* AppDelegate.swift */; };
 		9226A32C15349502EA4DB73C /* MagnifierView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E10D65E039062D55B58A0FA /* MagnifierView.swift */; };
 		9E79A033D61FEB308062A1A4 /* InPlaceTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69AAFE1D9791F81BD8D911EB /* InPlaceTextView.swift */; };
@@ -52,6 +53,7 @@
 		DB40C686F843C8369D6139A8 /* SwiftShot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SwiftShot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E3DF6BFB8F380709551B08B0 /* PinWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinWindowController.swift; sourceTree = "<group>"; };
 		ED58DD191B70ABC80C3CB5E7 /* Clipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Clipboard.swift; sourceTree = "<group>"; };
+		F19E7B5D18752BA41F200D31 /* PixelSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixelSampler.swift; sourceTree = "<group>"; };
 		FE0503C2A5CA4F51EF3FCA60 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -104,6 +106,7 @@
 				97404704433213ADA81D6B34 /* InPlaceHUDView.swift */,
 				69AAFE1D9791F81BD8D911EB /* InPlaceTextView.swift */,
 				0E10D65E039062D55B58A0FA /* MagnifierView.swift */,
+				F19E7B5D18752BA41F200D31 /* PixelSampler.swift */,
 				63425946CD808A881FBDAE42 /* ScreenshotOverlayController.swift */,
 				40AC59810C3275E453B24D60 /* UnifiedOverlayView.swift */,
 			);
@@ -224,6 +227,7 @@
 				9226A32C15349502EA4DB73C /* MagnifierView.swift in Sources */,
 				D57E443D959543A57DB743A7 /* MenuBarController.swift in Sources */,
 				747F60298FD76FA9BF95444F /* PinWindowController.swift in Sources */,
+				828C9D7249AE8BB7CFDE805A /* PixelSampler.swift in Sources */,
 				DD8FE0D608F09D5FA062C10E /* ScreenshotOverlayController.swift in Sources */,
 				812DE03FEC2C3F9431694A96 /* ScreenshotService.swift in Sources */,
 				D4914B21419604CF9748B699 /* Settings.swift in Sources */,

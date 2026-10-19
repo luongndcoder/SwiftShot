@@ -16,6 +16,7 @@ struct Annotation: Equatable {
         case counter    // Auto-incrementing circled number: ① ② ③...
         case blur
         case pixelate
+        case invert     // Inverts the colours of the underlying image
     }
 
     var kind: Kind

@@ -24,6 +24,18 @@ struct SettingsView: View {
                 }
                 Toggle("Also copy to clipboard after capture", isOn: $settings.copyToClipboard)
                 Toggle("Also auto-save to folder", isOn: $settings.autoSave)
+                Toggle("Copy on double click", isOn: $settings.copyOnDoubleClick)
+                Toggle("Reuse last region for next capture", isOn: $settings.useLastRegion)
+                if settings.useLastRegion, settings.lastRegion != nil {
+                    Button("Forget last region") {
+                        settings.lastRegion = nil
+                    }
+                    .controlSize(.small)
+                }
+                Toggle("Show pixel magnifier", isOn: $settings.showMagnifier)
+            }
+
+            Section("Saving") {
                 HStack {
                     Text("Save folder")
                     Spacer()
@@ -36,6 +48,25 @@ struct SettingsView: View {
                         chooseSaveDirectory()
                     }
                 }
+                Picker("Format", selection: $settings.saveFormat) {
+                    ForEach(SaveFormat.allCases) { format in
+                        Text(format.displayName).tag(format)
+                    }
+                }
+                if settings.saveFormat == .jpeg {
+                    HStack {
+                        Text("JPEG quality")
+                        Spacer()
+                        Slider(value: $settings.jpegQuality, in: 0.4...1.0, step: 0.05)
+                            .frame(width: 160)
+                        Text("\(Int(settings.jpegQuality * 100))%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 38, alignment: .trailing)
+                    }
+                }
+                Toggle("Ask where to save every time", isOn: $settings.askWhereToSave)
+                Toggle("Copy file path after saving", isOn: $settings.copyPathAfterSave)
             }
 
             Section("Annotation") {
@@ -50,13 +81,40 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 32, alignment: .trailing)
                 }
+                HStack {
+                    Text("Dim outside selection")
+                    Spacer()
+                    Slider(value: $settings.selectionOpacity, in: 0...0.8, step: 0.05)
+                        .frame(width: 160)
+                    Text("\(Int(settings.selectionOpacity * 100))%")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 38, alignment: .trailing)
+                }
+            }
+
+            Section("Color Presets") {
+                if settings.customColors.isEmpty {
+                    Text("No presets yet — pick a color in the capture toolbar and press + to add it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    HStack(spacing: 8) {
+                        ForEach(Array(settings.customColors.enumerated()), id: \.offset) { index, color in
+                            ColorSwatch(color: color) {
+                                settings.customColors.remove(at: index)
+                            }
+                        }
+                        Spacer()
+                    }
+                }
             }
 
             Section("About") {
                 HStack {
                     Text("SwiftShot")
                     Spacer()
-                    Text("v1.0.0")
+                    Text("v1.1.0")
                         .foregroundColor(.secondary)
                 }
                 Text("Lightweight native macOS screenshot tool. Inspired by Flameshot.")
@@ -66,7 +124,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 460, height: 380)
+        .frame(width: 480, height: 460)
         .onAppear {
             recorder.onCapture = { [settings] combo in
                 settings.hotkey = combo
@@ -99,6 +157,32 @@ struct SettingsView: View {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
         settings.saveDirectory = url
+    }
+}
+
+/// A colour chip with a small remove button.
+private struct ColorSwatch: View {
+    let color: NSColor
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color(nsColor: color))
+                .frame(width: 20, height: 20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
+                )
+            Button {
+                onRemove()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 10))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
     }
 }
 

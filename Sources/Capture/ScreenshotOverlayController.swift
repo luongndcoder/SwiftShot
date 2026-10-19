@@ -12,16 +12,22 @@ final class ScreenshotOverlayController {
     private var eventMonitor: Any?
     private var onComplete: (NSImage, CGRect, CaptureAction) -> Void
     private var onPin: (NSImage, CGRect) -> Void
-    private var onCancel: () -> Void
+    private var onCancel: (CGRect?) -> Void
 
     init(
         backgroundImage: CGImage,
         screen: NSScreen,
         initialColor: NSColor = .systemRed,
         initialStrokeWidth: CGFloat = 3,
+        initialSelection: CGRect? = nil,
+        colorPresets: [NSColor] = [],
+        dimOpacity: Double = 0.35,
+        showMagnifier: Bool = true,
+        copyOnDoubleClick: Bool = true,
         onComplete: @escaping (NSImage, CGRect, CaptureAction) -> Void,
         onPin: @escaping (NSImage, CGRect) -> Void,
-        onCancel: @escaping () -> Void
+        onCancel: @escaping (CGRect?) -> Void,
+        onAddColorPreset: ((NSColor) -> Void)? = nil
     ) {
         self.onComplete = onComplete
         self.onPin = onPin
@@ -32,16 +38,22 @@ final class ScreenshotOverlayController {
             screenFrame: screen.frame,
             initialColor: initialColor,
             initialStrokeWidth: initialStrokeWidth,
+            initialSelection: initialSelection,
+            colorPresets: colorPresets,
+            dimOpacity: dimOpacity,
+            showMagnifier: showMagnifier,
+            copyOnDoubleClick: copyOnDoubleClick,
             onFinishCapture: { [weak self] image, rect, action in
                 self?.finish(image: image, rect: rect, action: action)
             },
             onPinCapture: { [weak self] image, rect in
                 self?.pin(image: image, rect: rect)
             },
-            onCancel: { [weak self] in
-                self?.cancel()
+            onCancel: { [weak self] rect in
+                self?.cancel(rect: rect)
             }
         )
+        overlayView.onAddColorPreset = onAddColorPreset
 
         let overlayWindow = OverlayWindow(
             contentRect: screen.frame,
@@ -62,21 +74,22 @@ final class ScreenshotOverlayController {
 
         // Install local key monitor to ensure Esc always cancels regardless of focus
         self.eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak overlayView] event in
+            // Only intercept while the overlay is the key window — otherwise other
+            // windows (e.g. the colour panel) would not receive their key events.
+            guard let view = overlayView, view.window?.isKeyWindow == true else { return event }
+
             // If active text input is focused, let it receive typing, Enter, and Esc
-            if overlayView?.window?.firstResponder is NSTextView {
+            if view.window?.firstResponder is NSTextView {
                 return event
             }
 
             if event.keyCode == 53 { // kVK_Escape
-                self?.cancel()
+                self?.cancel(rect: view.currentSelection)
                 return nil
             }
-            // Pass other keys to overlay view
-            if let view = overlayView, view.window?.isKeyWindow == true {
-                view.keyDown(with: event)
-                return nil
-            }
-            return event
+
+            view.keyDown(with: event)
+            return nil
         }
     }
 
@@ -92,6 +105,8 @@ final class ScreenshotOverlayController {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
         }
+        // The shared colour panel is raised above the overlay — restore its level.
+        NSColorPanel.shared.level = .normal
         window?.orderOut(nil)
         window = nil
     }
@@ -106,8 +121,8 @@ final class ScreenshotOverlayController {
         onPin(image, rect)
     }
 
-    private func cancel() {
+    private func cancel(rect: CGRect?) {
         close()
-        onCancel()
+        onCancel(rect)
     }
 }

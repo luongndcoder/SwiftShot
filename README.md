@@ -44,15 +44,31 @@
   - 💬 **Text** (`T`) with direct typing
   - 💧 **Gaussian Blur** (`B`)
   - 🏁 **Pixelate / Redact**
-  - 🎨 **8-Color Quick Palette** & Right-click color picker menu
+  - 🔄 **Invert Colors** (`I`)
+  - 🎨 **8-Color Quick Palette** + full **Color Picker** + **eyedropper** (`G`) + user color presets
+- **⌨️ Pro Drawing Modifiers** (like Flameshot):
+  - `Ctrl` + drag *line / arrow / marker* → snaps to 0° / 45° / 90°
+  - `Ctrl` + drag *rectangle / ellipse* → keeps the aspect ratio (square)
+  - `Shift` + drag a handle → resizes the opposite handle symmetrically
+  - `Ctrl` + `Shift` + arrows → resizes symmetrically by 2px
+  - `Delete` / `Backspace` → removes the selected annotation
+- **💾 Flexible Saving**:
+  - `Save` writes a PNG/JPEG to the save folder, `Save As…` (`⇧⌘S`) opens the save panel
+  - PNG (lossless) or JPEG with an adjustable quality
+  - Optionally copies the file path to the clipboard
+  - Optionally asks where to save every time
+- **🖼️ Capture Options**: reuse the last region, copy on double click, configurable dim opacity, optional pixel magnifier
 - **⚡ Pixel-Perfect Retina Capture**: Powered by macOS 14+ `ScreenCaptureKit` with native backing scale resolution.
 - **⌨️ Muscle-Memory Shortcuts**:
   - `Command + Shift + 4` (`⇧⌘4`): Activate capture
   - `Command + C` / `Enter`: Copy screenshot directly to Clipboard
-  - `Command + S`: Save PNG to `~/Pictures/SwiftShot/`
+  - `Command + S`: Save to the save folder (PNG or JPEG)
+  - `Command + Shift + S`: Save As… (choose file name & format)
   - `Command + P`: Pin screenshot to the desktop
   - `Command + Z` / `Shift + Command + Z`: Undo / Redo
   - `Esc`: Cancel capture
+  - `Delete` / `Backspace`: Delete the selected annotation
+  - `I`: Invert colors · `G`: eyedropper · `N`: step counter
   - `Arrow Keys`: Nudge selection by 1px (`Shift + Arrows` to resize by 1px)
   - `Mouse Wheel`: Scroll to instantly increase/decrease tool stroke thickness
 - **🔒 Stable TCC Permissions**: Signs with a persistent developer signature (Apple Development certificate) so the macOS Screen Recording permission is granted **only once** and is not lost on rebuilds. Without such a certificate `install.sh` falls back to ad-hoc signing and macOS will ask for the permission again after every rebuild.
@@ -114,10 +130,18 @@ Open **Settings…** from the menu bar icon:
 | **Also copy to clipboard after capture** | Copies the result to the clipboard in addition to the action you picked. |
 | **Also auto-save to folder** | Writes a PNG into the save folder in addition to the action you picked. |
 | **Save folder** | Defaults to `~/Pictures/SwiftShot`. Use **Choose…** to pick another directory. |
+| **Format** | PNG (lossless) or JPEG with an adjustable quality. |
+| **Ask where to save every time** | Shows the save panel instead of writing to the save folder. |
+| **Copy file path after saving** | Puts the path of the saved file on the clipboard. |
+| **Copy on double click** | A double click inside the selection copies it and finishes the capture. |
+| **Reuse last region** | The next capture starts with the last selection rectangle. |
+| **Show pixel magnifier** | Shows the loupe with the RGB/HEX value while selecting. |
+| **Dim outside selection** | Opacity of the dimmed area (0–80%). |
 | **Default Color** | The color preselected for new annotations. |
 | **Stroke width** | The default stroke width of new annotations (1–20). |
+| **Color Presets** | Custom colors added with the `+` button in the capture toolbar. |
 
-> **Copy vs. Save**: the **Copy** button (or `⌘C` / `Enter`) copies to the clipboard, the **Save** button (or `⌘S`) writes a PNG file to the save folder. The two "Also…" toggles let you get both at once.
+> **Copy vs. Save**: the **Copy** button (or `⌘C` / `Enter`) copies to the clipboard, the **Save** button (or `⌘S`) writes a file to the save folder. The two "Also…" toggles let you get both at once.
 
 ---
 

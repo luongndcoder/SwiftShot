@@ -2,16 +2,23 @@ import AppKit
 import CoreGraphics
 
 /// Floating in-place HUD toolbar positioned directly outside the selection rectangle.
-/// Contains tool buttons, color indicators, undo, redo, pin, copy, save and cancel.
+///
+/// Layout is split over two rows so that the toolbar stays compact on small screens:
+/// * row 1 — drawing tools + capture actions
+/// * row 2 — colour palette, user presets and colour tools
 final class InPlaceHUDView: NSView {
     enum Action {
         case selectTool(Annotation.Kind)
         case changeColor(NSColor)
+        case addColorPreset
+        case openColorPicker
+        case eyedropper
         case undo
         case redo
         case pin
         case copy
         case save
+        case saveAs
         case cancel
     }
 
@@ -19,12 +26,14 @@ final class InPlaceHUDView: NSView {
     private var toolButtons: [Annotation.Kind: NSButton] = [:]
     private var currentTool: Annotation.Kind = .arrow
     private var currentColor: NSColor
+    private var presetStack: NSStackView?
 
-    init(initialColor: NSColor = .systemRed, onAction: @escaping (Action) -> Void) {
+    init(initialColor: NSColor = .systemRed, presets: [NSColor] = [], onAction: @escaping (Action) -> Void) {
         self.currentColor = initialColor
         self.onAction = onAction
         super.init(frame: .zero)
         setupUI()
+        setPresets(presets)
     }
 
     @available(*, unavailable)
@@ -43,12 +52,34 @@ final class InPlaceHUDView: NSView {
         layer?.shadowOffset = CGSize(width: 0, height: -2)
         layer?.shadowRadius = 8
 
-        let mainStack = NSStackView()
-        mainStack.orientation = .horizontal
-        mainStack.spacing = 3
-        mainStack.edgeInsets = NSEdgeInsets(top: 5, left: 6, bottom: 5, right: 6)
+        let rows = NSStackView()
+        rows.orientation = .vertical
+        rows.spacing = 4
+        rows.edgeInsets = NSEdgeInsets(top: 5, left: 6, bottom: 5, right: 6)
 
-        // 1. Drawing tools: Arrow, Line, Rect, FilledRect, Circle, Pencil, Marker, Text, Counter, Blur, Pixelate
+        rows.addArrangedSubview(makeToolsRow())
+        rows.addArrangedSubview(makeColorsRow())
+
+        addSubview(rows)
+        rows.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            rows.leadingAnchor.constraint(equalTo: leadingAnchor),
+            rows.trailingAnchor.constraint(equalTo: trailingAnchor),
+            rows.topAnchor.constraint(equalTo: topAnchor),
+            rows.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+
+        selectTool(.arrow)
+    }
+
+    // MARK: - Rows
+
+    private func makeToolsRow() -> NSStackView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.spacing = 3
+
+        // Drawing tools
         let tools: [(Annotation.Kind, String, String)] = [
             (.arrow, "arrow.up.right", "Arrow (A)"),
             (.line, "line.diagonal", "Line (D)"),
@@ -61,6 +92,7 @@ final class InPlaceHUDView: NSView {
             (.counter, "1.circle.fill", "Step Counter (N)"),
             (.blur, "camera.filters", "Blur (B)"),
             (.pixelate, "grid", "Pixelate"),
+            (.invert, "circle.lefthalf.filled", "Invert Colors (I)"),
         ]
 
         for (tool, icon, tip) in tools {
@@ -68,78 +100,117 @@ final class InPlaceHUDView: NSView {
                 self?.selectTool(tool)
             }
             toolButtons[tool] = btn
-            mainStack.addArrangedSubview(btn)
+            row.addArrangedSubview(btn)
         }
 
-        mainStack.addArrangedSubview(createSeparator())
+        row.addArrangedSubview(createSeparator())
 
-        // 2. Color Palette buttons (Red, Orange, Yellow, Green, Blue, Purple, White, Black)
-        let colors: [NSColor] = [
-            .systemRed, .systemOrange, .systemYellow,
-            .systemGreen, .systemBlue, .systemPurple,
-            .white, .black
-        ]
-
-        let colorStack = NSStackView()
-        colorStack.orientation = .horizontal
-        colorStack.spacing = 3
-
-        for color in colors {
-            let colorDot = createColorButton(color: color) { [weak self] in
-                self?.currentColor = color
-                self?.onAction(.changeColor(color))
-            }
-            colorStack.addArrangedSubview(colorDot)
-        }
-        mainStack.addArrangedSubview(colorStack)
-
-        mainStack.addArrangedSubview(createSeparator())
-
-        // 3. Actions: Undo, Redo, Pin, Copy, Save, Cancel
+        // Capture actions
         let undoBtn = createIconButton(systemName: "arrow.uturn.backward", tooltip: "Undo (⌘Z)") { [weak self] in
             self?.onAction(.undo)
         }
-        mainStack.addArrangedSubview(undoBtn)
+        row.addArrangedSubview(undoBtn)
 
         let redoBtn = createIconButton(systemName: "arrow.uturn.forward", tooltip: "Redo (⇧⌘Z)") { [weak self] in
             self?.onAction(.redo)
         }
-        mainStack.addArrangedSubview(redoBtn)
+        row.addArrangedSubview(redoBtn)
 
         let pinBtn = createIconButton(systemName: "pin.fill", tooltip: "Pin to Screen (⌘P)") { [weak self] in
             self?.onAction(.pin)
         }
         pinBtn.contentTintColor = .systemYellow
-        mainStack.addArrangedSubview(pinBtn)
+        row.addArrangedSubview(pinBtn)
 
         let copyBtn = createIconButton(systemName: "doc.on.clipboard.fill", tooltip: "Copy (⌘C / Enter)") { [weak self] in
             self?.onAction(.copy)
         }
         copyBtn.contentTintColor = .systemTeal
-        mainStack.addArrangedSubview(copyBtn)
+        row.addArrangedSubview(copyBtn)
 
         let saveBtn = createIconButton(systemName: "square.and.arrow.down.fill", tooltip: "Save (⌘S)") { [weak self] in
             self?.onAction(.save)
         }
         saveBtn.contentTintColor = .systemBlue
-        mainStack.addArrangedSubview(saveBtn)
+        row.addArrangedSubview(saveBtn)
+
+        let saveAsBtn = createIconButton(systemName: "square.and.arrow.down.on.square", tooltip: "Save As… (⇧⌘S)") { [weak self] in
+            self?.onAction(.saveAs)
+        }
+        saveAsBtn.contentTintColor = .systemBlue
+        row.addArrangedSubview(saveAsBtn)
 
         let cancelBtn = createIconButton(systemName: "xmark", tooltip: "Cancel (Esc)") { [weak self] in
             self?.onAction(.cancel)
         }
         cancelBtn.contentTintColor = .systemRed
-        mainStack.addArrangedSubview(cancelBtn)
+        row.addArrangedSubview(cancelBtn)
 
-        addSubview(mainStack)
-        mainStack.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            mainStack.leadingAnchor.constraint(equalTo: leadingAnchor),
-            mainStack.trailingAnchor.constraint(equalTo: trailingAnchor),
-            mainStack.topAnchor.constraint(equalTo: topAnchor),
-            mainStack.bottomAnchor.constraint(equalTo: bottomAnchor)
-        ])
+        return row
+    }
 
-        selectTool(.arrow)
+    private func makeColorsRow() -> NSStackView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.spacing = 3
+
+        // Default palette
+        let colors: [NSColor] = [
+            .systemRed, .systemOrange, .systemYellow,
+            .systemGreen, .systemBlue, .systemPurple,
+            .white, .black
+        ]
+        for color in colors {
+            let dot = createColorButton(color: color) { [weak self] in
+                self?.currentColor = color
+                self?.onAction(.changeColor(color))
+            }
+            row.addArrangedSubview(dot)
+        }
+
+        // User presets
+        let presets = NSStackView()
+        presets.orientation = .horizontal
+        presets.spacing = 3
+        row.addArrangedSubview(presets)
+        presetStack = presets
+
+        row.addArrangedSubview(createSeparator())
+
+        let pickerBtn = createIconButton(systemName: "paintpalette", tooltip: "Custom Color…") { [weak self] in
+            self?.openColorPanel()
+        }
+        row.addArrangedSubview(pickerBtn)
+
+        let dropperBtn = createIconButton(systemName: "eyedropper", tooltip: "Pick Color From Screen (G)") { [weak self] in
+            self?.onAction(.eyedropper)
+        }
+        row.addArrangedSubview(dropperBtn)
+
+        let addPresetBtn = createIconButton(systemName: "plus.circle", tooltip: "Add Current Color To Palette") { [weak self] in
+            self?.onAction(.addColorPreset)
+        }
+        row.addArrangedSubview(addPresetBtn)
+
+        return row
+    }
+
+    // MARK: - Public API
+
+    /// Replaces the user defined colour presets shown in the palette.
+    func setPresets(_ colors: [NSColor]) {
+        guard let presetStack else { return }
+        for view in presetStack.arrangedSubviews {
+            presetStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+        for color in colors {
+            let dot = createColorButton(color: color) { [weak self] in
+                self?.currentColor = color
+                self?.onAction(.changeColor(color))
+            }
+            presetStack.addArrangedSubview(dot)
+        }
     }
 
     func changeColor(_ color: NSColor) {
@@ -159,6 +230,30 @@ final class InPlaceHUDView: NSView {
         }
         onAction(.selectTool(tool))
     }
+
+    // MARK: - Colour panel
+
+    /// Opens the system colour panel on top of the capture overlay.
+    private func openColorPanel() {
+        let panel = NSColorPanel.shared
+        // The capture overlay lives on the .screenSaver level — the shared colour
+        // panel has to be raised as well, otherwise it would be hidden behind it.
+        panel.level = .screenSaver + 1
+        panel.showsAlpha = true
+        panel.isFloatingPanel = true
+        panel.setTarget(self)
+        panel.setAction(#selector(colorPanelChanged(_:)))
+        panel.color = currentColor
+        panel.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func colorPanelChanged(_ sender: NSColorPanel) {
+        let color = sender.color
+        currentColor = color
+        onAction(.changeColor(color))
+    }
+
+    // MARK: - Button factories
 
     private func createIconButton(systemName: String, tooltip: String, action: @escaping () -> Void) -> NSButton {
         let image = NSImage(systemSymbolName: systemName, accessibilityDescription: tooltip) ?? NSImage()
