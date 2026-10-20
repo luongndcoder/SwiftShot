@@ -13,10 +13,13 @@ enum CaptureAction {
 /// -> Direct Copy / Save / Pin (zero separate editor window needed!).
 @MainActor
 final class AppState: ObservableObject {
+    /// The single application instance — used by the MCP bridge.
+    static private(set) var shared: AppState?
+
     let settings = Settings()
     let hotkey = HotkeyManager()
     let menuBar = MenuBarController()
-    private let screenshotService = ScreenshotService()
+    let screenshotService = ScreenshotService()
 
     private var overlay: ScreenshotOverlayController?
     private var pinnedWindows: [PinWindowController] = []
@@ -28,6 +31,7 @@ final class AppState: ObservableObject {
     private var currentScreen: NSScreen?
 
     init() {
+        AppState.shared = self
         menuBar.configure(with: self)
         hotkey.configure { [weak self] in
             self?.startRegionCapture()
@@ -42,6 +46,7 @@ final class AppState: ObservableObject {
 
     func start() {
         menuBar.installStatusItem()
+        SwiftShotBridge.shared.start()
         screenshotService.startPermissionPolling { [weak self] granted in
             self?.menuBar.updatePermissionStatus(granted)
         }

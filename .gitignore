@@ -13,6 +13,9 @@ DerivedData/
 *.png.backup
 /tmp/
 
+# MCP server
+/MCP/.build/
+
 # Release artifacts
 /dist/
 *.zip

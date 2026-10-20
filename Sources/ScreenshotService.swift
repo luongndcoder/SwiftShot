@@ -39,11 +39,88 @@ final class ScreenshotService {
         }
     }
 
+    /// Captures a screen (or a region of it) without any user interaction.
+    ///
+    /// Used by the MCP bridge so that AI agents can take screenshots through the
+    /// running app — and therefore through its Screen Recording permission.
+    ///
+    /// - Parameters:
+    ///   - region: optional region in **global screen points** (origin bottom-left,
+    ///     same coordinate system as `NSScreen.frame`).
+    ///   - displayID: optional `NSScreenNumber` of the display to capture.
+    func capture(region: CGRect?, displayID: Int?) async throws -> (image: CGImage, sizeInPoints: CGSize, scale: CGFloat) {
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else { throw BridgeError.noScreen }
+
+        // Pick the display: by id, else the one containing the region, else the main one.
+        let target: NSScreen
+        if let displayID, let match = screens.first(where: {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.intValue == displayID
+        }) {
+            target = match
+        } else if let region, let match = screens.first(where: { $0.frame.intersects(region) }) {
+            target = match
+        } else {
+            target = NSScreen.main ?? screens[0]
+        }
+
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        guard let display = Self.matchDisplay(for: target, in: content.displays) else {
+            throw BridgeError.noDisplay
+        }
+
+        let scale = target.backingScaleFactor
+        let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+        let config = SCStreamConfiguration()
+        config.width = Int(target.frame.width * scale)
+        config.height = Int(target.frame.height * scale)
+        config.scalesToFit = false
+        config.showsCursor = false
+
+        let full = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+
+        guard let region else {
+            return (full, target.frame.size, scale)
+        }
+
+        // Convert the global region into the display's local pixel coordinates.
+        let local = region.offsetBy(dx: -target.frame.origin.x, dy: -target.frame.origin.y)
+            .intersection(CGRect(origin: .zero, size: target.frame.size))
+        guard !local.isEmpty else { throw BridgeError.emptyRegion }
+
+        let pixelRect = CGRect(
+            x: (local.origin.x * scale).rounded(),
+            // The bitmap is top-left based.
+            y: ((target.frame.height - local.maxY) * scale).rounded(),
+            width: (local.width * scale).rounded(),
+            height: (local.height * scale).rounded()
+        )
+        guard let cropped = full.cropping(to: pixelRect) else { throw BridgeError.cropFailed }
+
+        return (cropped, local.size, scale)
+    }
+
+    enum BridgeError: LocalizedError {
+        case noScreen
+        case noDisplay
+        case emptyRegion
+        case cropFailed
+
+        var errorDescription: String? {
+            switch self {
+            case .noScreen: return "No screen available"
+            case .noDisplay: return "The display could not be found"
+            case .emptyRegion: return "The requested region is outside of the screen"
+            case .cropFailed: return "The captured image could not be cropped"
+            }
+        }
+    }
+
     /// Maps an `NSScreen` onto the matching `SCDisplay`.
     ///
     /// The screen number is the only reliable identifier; comparing the frame origin
     /// alone picks the wrong display for vertically stacked multi-monitor setups.
-    private static func matchDisplay(for screen: NSScreen, in displays: [SCDisplay]) -> SCDisplay? {
+    static func matchDisplay(for screen: NSScreen, in displays: [SCDisplay]) -> SCDisplay? {
         if let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
            let match = displays.first(where: { $0.displayID == screenNumber.uint32Value }) {
             return match
