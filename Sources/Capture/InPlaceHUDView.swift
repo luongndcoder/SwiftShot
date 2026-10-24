@@ -54,21 +54,59 @@ final class InPlaceHUDView: NSView {
     // MARK: - Layout
 
     private func setupUI() {
+        // The HUD is always dark glass, whatever the system appearance is —
+        // forcing dark aqua also makes every label and tint inside render in
+        // its light variant, so text stays readable on the dark panel.
+        appearance = NSAppearance(named: .darkAqua)
+
         wantsLayer = true
-        layer?.cornerRadius = 12
-        layer?.backgroundColor = NSColor(calibratedWhite: 0.16, alpha: 0.92).cgColor
-        layer?.borderColor = NSColor.white.withAlphaComponent(0.16).cgColor
+        layer?.cornerRadius = 16
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.18).cgColor
         layer?.borderWidth = 1
         layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.45
-        layer?.shadowOffset = CGSize(width: 0, height: -3)
-        layer?.shadowRadius = 12
+        layer?.shadowOpacity = 0.5
+        layer?.shadowOffset = CGSize(width: 0, height: -4)
+        layer?.shadowRadius = 16
+
+        // Real frosted glass behind the controls: blurs the captured screen
+        // showing through the (transparent) overlay window.
+        let glass = NSVisualEffectView()
+        glass.material = .hudWindow
+        glass.blendingMode = .behindWindow
+        glass.state = .active
+        glass.appearance = NSAppearance(named: .darkAqua)
+        glass.wantsLayer = true
+        glass.layer?.cornerRadius = 16
+        glass.layer?.masksToBounds = true
+        addSubview(glass)
+        glass.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            glass.leadingAnchor.constraint(equalTo: leadingAnchor),
+            glass.trailingAnchor.constraint(equalTo: trailingAnchor),
+            glass.topAnchor.constraint(equalTo: topAnchor),
+            glass.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+        // A whisper of dark tint over the glass keeps white icons crisp even
+        // over a bright desktop.
+        let tint = NSView()
+        tint.wantsLayer = true
+        tint.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.18).cgColor
+        tint.layer?.cornerRadius = 16
+        tint.layer?.masksToBounds = true
+        addSubview(tint)
+        tint.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            tint.leadingAnchor.constraint(equalTo: leadingAnchor),
+            tint.trailingAnchor.constraint(equalTo: trailingAnchor),
+            tint.topAnchor.constraint(equalTo: topAnchor),
+            tint.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
 
         let rows = NSStackView()
         rows.orientation = .vertical
-        rows.spacing = 6
+        rows.spacing = 7
         rows.alignment = .leading
-        rows.edgeInsets = NSEdgeInsets(top: 7, left: 8, bottom: 7, right: 8)
+        rows.edgeInsets = NSEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
 
         rows.addArrangedSubview(makeToolsRow())
         rows.addArrangedSubview(makeBottomRow())
@@ -86,58 +124,87 @@ final class InPlaceHUDView: NSView {
         refreshColorSelection()
     }
 
-    /// Row 1: the drawing tools, grouped by purpose.
+    /// Row 1: the drawing tools, each purpose group in its own subtle pill.
     private func makeToolsRow() -> NSStackView {
         let row = NSStackView()
         row.orientation = .horizontal
-        row.spacing = 4
+        row.spacing = 6
 
         // Group 1 — move & select
-        row.addArrangedSubview(createToolButton(.move, symbol: "hand.raised", name: "Move Selection"))
-        row.addArrangedSubview(createToolButton(.select, symbol: "cursorarrow.click.2", name: "Select Object"))
-        row.addArrangedSubview(makeSeparator())
+        row.addArrangedSubview(makeGroupPill([
+            createToolButton(.move, symbol: "hand.raised", name: "Move Selection"),
+            createToolButton(.select, symbol: "cursorarrow.click.2", name: "Select Object")
+        ]))
 
         // Group 2 — shapes
-        row.addArrangedSubview(createToolButton(.arrow, symbol: "arrow.up.right", name: "Arrow"))
-        row.addArrangedSubview(createToolButton(.line, symbol: "line.diagonal", name: "Line"))
-        row.addArrangedSubview(createToolButton(.rectangle, symbol: "rectangle", name: "Rectangle"))
-        row.addArrangedSubview(createToolButton(.filledRectangle, symbol: "rectangle.fill", name: "Filled Rectangle"))
-        row.addArrangedSubview(createToolButton(.ellipse, symbol: "circle", name: "Ellipse"))
-        row.addArrangedSubview(makeSeparator())
+        row.addArrangedSubview(makeGroupPill([
+            createToolButton(.arrow, symbol: "arrow.up.right", name: "Arrow"),
+            createToolButton(.line, symbol: "line.diagonal", name: "Line"),
+            createToolButton(.rectangle, symbol: "rectangle", name: "Rectangle"),
+            createToolButton(.filledRectangle, symbol: "rectangle.fill", name: "Filled Rectangle"),
+            createToolButton(.ellipse, symbol: "circle", name: "Ellipse")
+        ]))
 
         // Group 3 — freehand & text
-        row.addArrangedSubview(createToolButton(.freehand, symbol: "pencil.tip", name: "Pencil"))
-        row.addArrangedSubview(createToolButton(.marker, symbol: "highlighter", name: "Marker"))
-        row.addArrangedSubview(createToolButton(.text, symbol: "textformat", name: "Text"))
-        row.addArrangedSubview(createToolButton(.counter, symbol: "1.circle.fill", name: "Step Counter"))
-        row.addArrangedSubview(makeSeparator())
+        row.addArrangedSubview(makeGroupPill([
+            createToolButton(.freehand, symbol: "pencil.tip", name: "Pencil"),
+            createToolButton(.marker, symbol: "highlighter", name: "Marker"),
+            createToolButton(.text, symbol: "textformat", name: "Text"),
+            createToolButton(.counter, symbol: "1.circle.fill", name: "Step Counter")
+        ]))
 
         // Group 4 — effects
-        row.addArrangedSubview(createToolButton(.blur, symbol: "drop", name: "Blur"))
-        row.addArrangedSubview(createToolButton(.pixelate, symbol: "square.grid.3x3", name: "Pixelate"))
-        row.addArrangedSubview(createToolButton(.invert, symbol: "circle.lefthalf.filled.inverse", name: "Invert Colors"))
-        row.addArrangedSubview(makeSeparator())
+        row.addArrangedSubview(makeGroupPill([
+            createToolButton(.blur, symbol: "drop", name: "Blur"),
+            createToolButton(.pixelate, symbol: "square.grid.3x3", name: "Pixelate"),
+            createToolButton(.invert, symbol: "circle.lefthalf.filled.inverse", name: "Invert Colors")
+        ]))
 
         // Group 5 — stroke width (also adjustable with the scroll wheel)
-        row.addArrangedSubview(createIconButton(
+        let minusButton = createIconButton(
             symbol: "minus", name: "Thinner stroke", tint: .labelColor
         ) { [weak self] in
             self?.adjustStrokeWidth(by: -1)
-        })
-        strokeWidthLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+        }
+        strokeWidthLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
         strokeWidthLabel.textColor = .labelColor
         strokeWidthLabel.alignment = .center
         strokeWidthLabel.toolTip = "Stroke width"
-        strokeWidthLabel.widthAnchor.constraint(equalToConstant: 26).isActive = true
-        row.addArrangedSubview(strokeWidthLabel)
-        row.addArrangedSubview(createIconButton(
+        strokeWidthLabel.widthAnchor.constraint(equalToConstant: 28).isActive = true
+        let plusButton = createIconButton(
             symbol: "plus", name: "Thicker stroke", tint: .labelColor
         ) { [weak self] in
             self?.adjustStrokeWidth(by: 1)
-        })
+        }
+        row.addArrangedSubview(makeGroupPill([minusButton, strokeWidthLabel, plusButton]))
         updateStrokeWidthLabel()
 
         return row
+    }
+
+    /// Wraps a group of controls in a soft pill so the groups read at a glance.
+    private func makeGroupPill(_ views: [NSView]) -> NSView {
+        let stack = NSStackView(views: views)
+        stack.orientation = .horizontal
+        stack.spacing = 2
+        stack.alignment = .centerY
+        stack.edgeInsets = NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3)
+
+        let pill = NSView()
+        pill.wantsLayer = true
+        pill.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.07).cgColor
+        pill.layer?.cornerRadius = 11
+        pill.layer?.borderColor = NSColor.white.withAlphaComponent(0.05).cgColor
+        pill.layer?.borderWidth = 1
+        pill.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: pill.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: pill.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: pill.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: pill.bottomAnchor)
+        ])
+        return pill
     }
 
     /// Row 2: colours on the left, the status label in the middle, actions on the right.
@@ -147,42 +214,39 @@ final class InPlaceHUDView: NSView {
         row.spacing = 6
         row.alignment = .centerY
 
-        // Colour palette
+        // Colour palette (built-in swatches + user presets) in one pill
         let colors: [NSColor] = [
             .systemRed, .systemOrange, .systemYellow,
             .systemGreen, .systemBlue, .systemPurple,
             .white, .black
         ]
-        for color in colors {
-            row.addArrangedSubview(createColorButton(color: color, name: "Colour"))
-        }
+        var paletteViews: [NSView] = colors.map { createColorButton(color: $0, name: "Colour") }
 
         let presets = NSStackView()
         presets.orientation = .horizontal
         presets.spacing = 3
-        row.addArrangedSubview(presets)
+        paletteViews.append(presets)
         presetStack = presets
+        row.addArrangedSubview(makeGroupPill(paletteViews))
 
-        row.addArrangedSubview(makeSeparator())
-
-        // Colour tools
-        row.addArrangedSubview(createIconButton(
-            symbol: "plus.circle", name: "Add colour to palette", tint: .labelColor
-        ) { [weak self] in
-            self?.onAction(.addColorPreset)
-        })
-        row.addArrangedSubview(createIconButton(
-            symbol: "paintpalette", name: "Custom colour…", tint: .labelColor
-        ) { [weak self] in
-            self?.openColorPanel()
-        })
-        row.addArrangedSubview(createIconButton(
-            symbol: "eyedropper", name: "Pick colour from screen (G)", tint: .labelColor
-        ) { [weak self] in
-            self?.onAction(.eyedropper)
-        })
-
-        row.addArrangedSubview(makeSeparator())
+        // Colour tools in one pill
+        row.addArrangedSubview(makeGroupPill([
+            createIconButton(
+                symbol: "plus.circle", name: "Add colour to palette", tint: .labelColor
+            ) { [weak self] in
+                self?.onAction(.addColorPreset)
+            },
+            createIconButton(
+                symbol: "paintpalette", name: "Custom colour…", tint: .labelColor
+            ) { [weak self] in
+                self?.openColorPanel()
+            },
+            createIconButton(
+                symbol: "eyedropper", name: "Pick colour from screen (G)", tint: .labelColor
+            ) { [weak self] in
+                self?.onAction(.eyedropper)
+            }
+        ]))
 
         // Status label — always shows what the hovered/active tool does.
         statusLabel.font = NSFont.systemFont(ofSize: 12, weight: .medium)
@@ -193,43 +257,48 @@ final class InPlaceHUDView: NSView {
         statusLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
         row.addArrangedSubview(statusLabel)
 
-        // Actions
-        row.addArrangedSubview(createIconButton(
-            symbol: "arrow.uturn.backward", name: "Undo (⌘Z)", tint: .labelColor
-        ) { [weak self] in
-            self?.onAction(.undo)
-        })
-        row.addArrangedSubview(createIconButton(
-            symbol: "arrow.uturn.forward", name: "Redo (⇧⌘Z)", tint: .labelColor
-        ) { [weak self] in
-            self?.onAction(.redo)
-        })
-        row.addArrangedSubview(makeSeparator())
-        row.addArrangedSubview(createIconButton(
-            symbol: "pin.fill", name: "Pin to screen (⌘P)", tint: .systemYellow
-        ) { [weak self] in
-            self?.onAction(.pin)
-        })
-        row.addArrangedSubview(createIconButton(
-            symbol: "doc.on.clipboard.fill", name: "Copy (⌘C / Enter)", tint: .systemTeal
-        ) { [weak self] in
-            self?.onAction(.copy)
-        })
-        row.addArrangedSubview(createIconButton(
-            symbol: "square.and.arrow.down.fill", name: "Save (⌘S)", tint: .systemBlue
-        ) { [weak self] in
-            self?.onAction(.save)
-        })
-        row.addArrangedSubview(createIconButton(
-            symbol: "square.and.arrow.down.on.square", name: "Save as… (⇧⌘S)", tint: .systemBlue
-        ) { [weak self] in
-            self?.onAction(.saveAs)
-        })
-        row.addArrangedSubview(createIconButton(
-            symbol: "xmark", name: "Cancel (Esc)", tint: .systemRed
-        ) { [weak self] in
-            self?.onAction(.cancel)
-        })
+        // Undo / redo in one pill
+        row.addArrangedSubview(makeGroupPill([
+            createIconButton(
+                symbol: "arrow.uturn.backward", name: "Undo (⌘Z)", tint: .labelColor
+            ) { [weak self] in
+                self?.onAction(.undo)
+            },
+            createIconButton(
+                symbol: "arrow.uturn.forward", name: "Redo (⇧⌘Z)", tint: .labelColor
+            ) { [weak self] in
+                self?.onAction(.redo)
+            }
+        ]))
+
+        // Finish actions in one pill
+        row.addArrangedSubview(makeGroupPill([
+            createIconButton(
+                symbol: "pin.fill", name: "Pin to screen (⌘P)", tint: .systemYellow
+            ) { [weak self] in
+                self?.onAction(.pin)
+            },
+            createIconButton(
+                symbol: "doc.on.clipboard.fill", name: "Copy (⌘C / Enter)", tint: .systemTeal
+            ) { [weak self] in
+                self?.onAction(.copy)
+            },
+            createIconButton(
+                symbol: "square.and.arrow.down.fill", name: "Save (⌘S)", tint: .systemBlue
+            ) { [weak self] in
+                self?.onAction(.save)
+            },
+            createIconButton(
+                symbol: "square.and.arrow.down.on.square", name: "Save as… (⇧⌘S)", tint: .systemBlue
+            ) { [weak self] in
+                self?.onAction(.saveAs)
+            },
+            createIconButton(
+                symbol: "xmark", name: "Cancel (Esc)", tint: .systemRed
+            ) { [weak self] in
+                self?.onAction(.cancel)
+            }
+        ]))
 
         return row
     }
@@ -370,8 +439,8 @@ final class InPlaceHUDView: NSView {
         action: @escaping () -> Void
     ) -> TileButton {
         let image = NSImage(systemSymbolName: symbol, accessibilityDescription: name) ?? NSImage()
-        // A slightly larger, medium weight symbol reads much better in a 28pt tile.
-        let configuration = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
+        // A slightly larger, semibold symbol reads much better in a 32pt tile.
+        let configuration = NSImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
         let sized = image.withSymbolConfiguration(configuration) ?? image
         let btn = TileButton(image: sized, name: name, action: action)
         btn.contentTintColor = tint
@@ -391,7 +460,7 @@ final class InPlaceHUDView: NSView {
     private func createColorButton(color: NSColor, name: String) -> NSButton {
         let btn = TileButton(image: NSImage(), name: name, action: { [weak self] in
             self?.changeColor(color)
-        }, size: 22)
+        }, size: 24)
         btn.isColorSwatch = true
         btn.swatchColor = color
         btn.contentTintColor = .labelColor
@@ -399,14 +468,6 @@ final class InPlaceHUDView: NSView {
         return btn
     }
 
-    private func makeSeparator() -> NSView {
-        let sep = NSView()
-        sep.wantsLayer = true
-        sep.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.18).cgColor
-        sep.widthAnchor.constraint(equalToConstant: 1).isActive = true
-        sep.heightAnchor.constraint(equalToConstant: 22).isActive = true
-        return sep
-    }
 }
 
 // MARK: - Tile button
@@ -434,8 +495,12 @@ final class TileButton: NSButton {
     /// Called with the description while the mouse hovers the tile.
     var onHover: ((String?) -> Void)?
 
-    init(image: NSImage, name: String, action: @escaping () -> Void, size: CGFloat = 28) {
+    /// The tile's edge length (colour swatches are drawn as circles of it).
+    private let tileSize: CGFloat
+
+    init(image: NSImage, name: String, action: @escaping () -> Void, size: CGFloat = 32) {
         self.actionClosure = action
+        self.tileSize = size
         super.init(frame: .zero)
         self.image = image
         self.target = self
@@ -487,10 +552,12 @@ final class TileButton: NSButton {
     }
 
     private func updateAppearance() {
-        layer?.cornerRadius = 7
         layer?.borderWidth = 1
+        layer?.shadowOpacity = 0
 
         if isColorSwatch {
+            // Swatches are circles, not rounded squares.
+            layer?.cornerRadius = tileSize / 2
             layer?.backgroundColor = swatchColor.cgColor
             if isActive {
                 // The currently selected colour gets a thick bright ring.
@@ -506,12 +573,18 @@ final class TileButton: NSButton {
             return
         }
 
+        layer?.cornerRadius = 9
         if isActive {
-            layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.85).cgColor
-            layer?.borderColor = NSColor.white.withAlphaComponent(0.35).cgColor
+            layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.9).cgColor
+            layer?.borderColor = NSColor.white.withAlphaComponent(0.45).cgColor
+            // A soft blue glow lifts the active tool off the glass.
+            layer?.shadowColor = NSColor.systemBlue.cgColor
+            layer?.shadowOpacity = 0.55
+            layer?.shadowRadius = 7
+            layer?.shadowOffset = CGSize(width: 0, height: -1)
         } else if hoverActive {
-            layer?.backgroundColor = NSColor.white.withAlphaComponent(0.16).cgColor
-            layer?.borderColor = NSColor.white.withAlphaComponent(0.22).cgColor
+            layer?.backgroundColor = NSColor.white.withAlphaComponent(0.2).cgColor
+            layer?.borderColor = NSColor.white.withAlphaComponent(0.28).cgColor
         } else {
             layer?.backgroundColor = NSColor.clear.cgColor
             layer?.borderColor = NSColor.clear.cgColor
