@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import ScreenCaptureKit
 
 /// What the user explicitly asked to do with a finished capture.
 enum CaptureAction {
@@ -20,6 +21,7 @@ final class AppState: ObservableObject {
     let hotkey = HotkeyManager()
     let menuBar = MenuBarController()
     let screenshotService = ScreenshotService()
+    let recorder = ScreenRecorder()
 
     private var overlay: ScreenshotOverlayController?
     private var pinnedWindows: [PinWindowController] = []
@@ -42,7 +44,30 @@ final class AppState: ObservableObject {
             }
         }
         hotkey.bind(settings: settings)
+
+        recorder.onRecordingChanged = { [weak self] recording in
+            self?.menuBar.setRecording(recording)
+        }
+        recorder.onFinished = { [weak self] url in
+            guard let self else { return }
+            if self.settings.copyPathAfterSave {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(url.path, forType: .string)
+                self.menuBar.showTransient("Recording saved (path copied)")
+            } else {
+                self.menuBar.showTransient("Recording saved to \(url.lastPathComponent)")
+            }
+        }
+        recorder.onError = { [weak self] message in
+            self?.menuBar.showError(message)
+        }
     }
+
+    /// Whether a screen recording is currently running (drives the menu).
+    var isRecordingNow: Bool { recorder.isRecording }
+    /// When the current recording started (drives the menu's elapsed timer).
+    var recordingStartedAt: Date? { recorder.startedAt }
 
     func start() {
         menuBar.installStatusItem()
@@ -55,6 +80,10 @@ final class AppState: ObservableObject {
     // MARK: - Capture Workflow
 
     func startRegionCapture() {
+        if recorder.isRecording {
+            menuBar.showTransient("Stop the recording before capturing")
+            return
+        }
         guard !isCapturing, overlay == nil else { return }
         isCapturing = true
 
@@ -247,6 +276,100 @@ final class AppState: ObservableObject {
         pinController.show()
         pinnedWindows.append(pinController)
         menuBar.showTransient("Pinned to Screen")
+    }
+
+    // MARK: - Screen Recording
+
+    /// Records the whole display under the mouse cursor.
+    func startFullScreenRecording() {
+        guard !recorder.isRecording, !isCapturing, overlay == nil else { return }
+
+        Task { @MainActor in
+            // Small pause ensures no previous menu items interfere
+            try? await Task.sleep(nanoseconds: 80_000_000)
+
+            guard let (screen, display) = await screenshotService.screenAndDisplayAtMouse() else {
+                self.menuBar.showError("Screen Recording permission required! Check System Settings.")
+                return
+            }
+            self.beginRecording(screen: screen, display: display, region: nil)
+        }
+    }
+
+    /// Lets the user drag a region with the capture overlay, then records
+    /// exactly that region of the display.
+    func startRegionRecordingPicker() {
+        guard !recorder.isRecording, !isCapturing, overlay == nil else { return }
+        isCapturing = true
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 80_000_000)
+
+            guard let (bgImage, screen) = await screenshotService.captureDisplay() else {
+                self.isCapturing = false
+                self.menuBar.showError("Screen Recording permission required! Check System Settings.")
+                return
+            }
+            self.currentScreen = screen
+
+            self.overlay = ScreenshotOverlayController(
+                backgroundImage: bgImage,
+                screen: screen,
+                onComplete: { _, _, _ in },
+                onPin: { _, _ in },
+                onCancel: { [weak self] _ in
+                    self?.isCapturing = false
+                    self?.overlay = nil
+                },
+                onRegionPicked: { [weak self] rect in
+                    guard let self else { return }
+                    self.isCapturing = false
+                    self.overlay = nil
+                    // The picked rect is local to the picker's screen; the
+                    // mouse is still on that screen, so resolving the display
+                    // at the mouse targets the same display.
+                    Task { @MainActor in
+                        guard let (recordScreen, display) = await self.screenshotService.screenAndDisplayAtMouse() else {
+                            self.menuBar.showError("Could not find the display to record")
+                            return
+                        }
+                        self.beginRecording(screen: recordScreen, display: display, region: rect)
+                    }
+                }
+            )
+            self.overlay?.begin()
+        }
+    }
+
+    func stopRecording() {
+        Task { @MainActor in
+            await recorder.stop()
+        }
+    }
+
+    private func beginRecording(screen: NSScreen, display: SCDisplay, region: CGRect?) {
+        let baseName = FileStore.timestampedName()
+        var outputURL = settings.saveDirectory.appendingPathComponent("\(baseName).mp4")
+        var counter = 1
+        while FileManager.default.fileExists(atPath: outputURL.path) {
+            outputURL = settings.saveDirectory.appendingPathComponent("\(baseName)_\(counter).mp4")
+            counter += 1
+        }
+
+        Task { @MainActor in
+            do {
+                try await recorder.start(
+                    display: display,
+                    displayPointSize: screen.frame.size,
+                    scale: screen.backingScaleFactor,
+                    region: region,
+                    includeAudio: settings.recordSystemAudio,
+                    outputURL: outputURL
+                )
+            } catch {
+                self.menuBar.showError("Could not start recording: \(error.localizedDescription)")
+            }
+        }
     }
 
     func openSettings() {

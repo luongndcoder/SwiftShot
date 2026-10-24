@@ -13,6 +13,7 @@ final class ScreenshotOverlayController {
     private var onComplete: (NSImage, CGRect, CaptureAction) -> Void
     private var onPin: (NSImage, CGRect) -> Void
     private var onCancel: (CGRect?) -> Void
+    private var onRegionPicked: ((CGRect) -> Void)?
 
     init(
         backgroundImage: CGImage,
@@ -27,11 +28,13 @@ final class ScreenshotOverlayController {
         onComplete: @escaping (NSImage, CGRect, CaptureAction) -> Void,
         onPin: @escaping (NSImage, CGRect) -> Void,
         onCancel: @escaping (CGRect?) -> Void,
-        onAddColorPreset: ((NSColor) -> Void)? = nil
+        onAddColorPreset: ((NSColor) -> Void)? = nil,
+        onRegionPicked: ((CGRect) -> Void)? = nil
     ) {
         self.onComplete = onComplete
         self.onPin = onPin
         self.onCancel = onCancel
+        self.onRegionPicked = onRegionPicked
 
         let overlayView = UnifiedOverlayView(
             backgroundImage: backgroundImage,
@@ -54,6 +57,11 @@ final class ScreenshotOverlayController {
             }
         )
         overlayView.onAddColorPreset = onAddColorPreset
+        if onRegionPicked != nil {
+            overlayView.onRegionPicked = { [weak self] rect in
+                self?.regionPicked(rect)
+            }
+        }
 
         let overlayWindow = OverlayWindow(
             contentRect: screen.frame,
@@ -124,5 +132,10 @@ final class ScreenshotOverlayController {
     private func cancel(rect: CGRect?) {
         close()
         onCancel(rect)
+    }
+
+    private func regionPicked(_ rect: CGRect) {
+        close()
+        onRegionPicked?(rect)
     }
 }

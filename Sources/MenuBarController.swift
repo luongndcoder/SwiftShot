@@ -10,6 +10,9 @@ final class MenuBarController {
     private var settingsWindow: NSWindow?
 
     private var permissionIndicator: NSMenuItem?
+    private var lastPermissionGranted: Bool?
+    private var elapsedIndicator: NSMenuItem?
+    private var recordingTimer: Timer?
 
     func configure(with state: AppState) {
         self.appState = state
@@ -28,6 +31,7 @@ final class MenuBarController {
     }
 
     func updatePermissionStatus(_ granted: Bool) {
+        lastPermissionGranted = granted
         permissionIndicator?.title = granted ? "Screen Recording: Granted ✓" : "Screen Recording: Needs Permission"
     }
 
@@ -78,7 +82,39 @@ final class MenuBarController {
 
         menu.addItem(.separator())
 
-        let permissionTitle = "Screen Recording: Checking…"
+        if appState?.isRecordingNow == true {
+            let elapsedItem = NSMenuItem(title: "● Recording 00:00", action: nil, keyEquivalent: "")
+            elapsedItem.isEnabled = false
+            menu.addItem(elapsedItem)
+            elapsedIndicator = elapsedItem
+
+            let stopItem = NSMenuItem(title: "Stop Recording", action: #selector(stopRecordAction), keyEquivalent: "")
+            stopItem.target = self
+            menu.addItem(stopItem)
+        } else {
+            elapsedIndicator = nil
+
+            let recordFullItem = NSMenuItem(title: "Record Full Screen", action: #selector(recordFullAction), keyEquivalent: "")
+            recordFullItem.target = self
+            menu.addItem(recordFullItem)
+
+            let recordRegionItem = NSMenuItem(title: "Record Region…", action: #selector(recordRegionAction), keyEquivalent: "")
+            recordRegionItem.target = self
+            menu.addItem(recordRegionItem)
+        }
+
+        menu.addItem(.separator())
+
+        // The menu is rebuilt when the recording state flips; keep showing the
+        // last known permission state instead of falling back to "Checking…"
+        // (the permission poller only reports *changes*, so it might never
+        // correct a reset title again).
+        let permissionTitle: String
+        switch lastPermissionGranted {
+        case .some(true): permissionTitle = "Screen Recording: Granted ✓"
+        case .some(false): permissionTitle = "Screen Recording: Needs Permission"
+        case .none: permissionTitle = "Screen Recording: Checking…"
+        }
         let permissionItem = NSMenuItem(title: permissionTitle, action: nil, keyEquivalent: "")
         permissionItem.isEnabled = false
         menu.addItem(permissionItem)
@@ -100,6 +136,50 @@ final class MenuBarController {
 
     @objc private func captureAction() {
         appState?.startRegionCapture()
+    }
+
+    @objc private func recordFullAction() {
+        appState?.startFullScreenRecording()
+    }
+
+    @objc private func recordRegionAction() {
+        appState?.startRegionRecordingPicker()
+    }
+
+    @objc private func stopRecordAction() {
+        appState?.stopRecording()
+    }
+
+    // MARK: - Recording state
+
+    /// Rebuilds the menu for the new recording state and runs the elapsed timer.
+    func setRecording(_ recording: Bool) {
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+        if recording {
+            updateElapsed()
+            recordingTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.updateElapsed()
+                }
+            }
+        } else {
+            statusItem?.button?.title = ""
+        }
+        rebuildMenu()
+        if recording {
+            updateElapsed()
+        }
+    }
+
+    private func updateElapsed() {
+        guard let startedAt = appState?.recordingStartedAt else { return }
+        let total = max(0, Int(Date().timeIntervalSince(startedAt)))
+        let text = total >= 3600
+            ? String(format: "%d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
+            : String(format: "%02d:%02d", total / 60, total % 60)
+        elapsedIndicator?.title = "● Recording \(text)"
+        statusItem?.button?.title = " \(text)"
     }
 
     @objc private func settingsAction() {

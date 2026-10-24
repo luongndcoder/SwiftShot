@@ -24,6 +24,7 @@ final class Settings: ObservableObject {
         static let customColors = "customColors"
         static let showMagnifier = "showMagnifier"
         static let selectionOpacity = "selectionOpacity"
+        static let recordSystemAudio = "recordSystemAudio"
     }
 
     /// Default global hotkey: ⇧⌘4 (Command + Shift + 4), same as the native macOS region capture.
@@ -121,6 +122,14 @@ final class Settings: ObservableObject {
         didSet { defaults.set(selectionOpacity, forKey: Key.selectionOpacity) }
     }
 
+    // MARK: - Recording
+
+    /// Records system audio (sounds played by the Mac and other apps) into the
+    /// video file. Microphone capture is not offered (macOS 15 API).
+    @Published var recordSystemAudio: Bool = true {
+        didSet { defaults.set(recordSystemAudio, forKey: Key.recordSystemAudio) }
+    }
+
     private let defaults = UserDefaults.standard
 
     init() {
@@ -158,6 +167,7 @@ final class Settings: ObservableObject {
         }
         showMagnifier = defaults.object(forKey: Key.showMagnifier) as? Bool ?? true
         selectionOpacity = defaults.object(forKey: Key.selectionOpacity) as? Double ?? 0.35
+        recordSystemAudio = defaults.object(forKey: Key.recordSystemAudio) as? Bool ?? true
     }
 
     // MARK: - Region coding
