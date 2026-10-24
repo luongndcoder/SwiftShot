@@ -18,6 +18,7 @@
 		7FC62640BD932CCAE7CAB0C7 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 154625D6BA531DEFB127C1C6 /* AppIcon.icns */; };
 		812DE03FEC2C3F9431694A96 /* ScreenshotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68F46D58A4CFF5D3AC9F2E3B /* ScreenshotService.swift */; };
 		C650326048044B658ED86E3F /* ScreenRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57E1DE9946F04A6B92DAD0D7 /* ScreenRecorder.swift */; };
+		D15EA5E00000000000000B01 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15EA5E00000000000000F01 /* UpdateChecker.swift */; };
 		828C9D7249AE8BB7CFDE805A /* PixelSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = F19E7B5D18752BA41F200D31 /* PixelSampler.swift */; };
 		8E7542E223EA73E200541D6D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A3066F3DA8C66DF731946B9 /* AppDelegate.swift */; };
 		9226A32C15349502EA4DB73C /* MagnifierView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E10D65E039062D55B58A0FA /* MagnifierView.swift */; };
@@ -47,6 +48,7 @@
 		68A4D20DB816AB876487D11B /* Annotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Annotation.swift; sourceTree = "<group>"; };
 		68F46D58A4CFF5D3AC9F2E3B /* ScreenshotService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotService.swift; sourceTree = "<group>"; };
 		57E1DE9946F04A6B92DAD0D7 /* ScreenRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRecorder.swift; sourceTree = "<group>"; };
+		D15EA5E00000000000000F01 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 		69AAFE1D9791F81BD8D911EB /* InPlaceTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InPlaceTextView.swift; sourceTree = "<group>"; };
 		828BC161D3DF7C997AF3AE59 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		8A3066F3DA8C66DF731946B9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -129,6 +131,7 @@
 				563F64077B19D92C2C8CD27D /* MenuBarController.swift */,
 				68F46D58A4CFF5D3AC9F2E3B /* ScreenshotService.swift */,
 				57E1DE9946F04A6B92DAD0D7 /* ScreenRecorder.swift */,
+				D15EA5E00000000000000F01 /* UpdateChecker.swift */,
 				828BC161D3DF7C997AF3AE59 /* Settings.swift */,
 				A8716A0B98E6D9CA158C6482 /* SwiftShot.entitlements */,
 				1ABCAF4573E832189246CA4F /* SwiftShotApp.swift */,
@@ -245,6 +248,7 @@
 				DD8FE0D608F09D5FA062C10E /* ScreenshotOverlayController.swift in Sources */,
 				812DE03FEC2C3F9431694A96 /* ScreenshotService.swift in Sources */,
 				C650326048044B658ED86E3F /* ScreenRecorder.swift in Sources */,
+				D15EA5E00000000000000B01 /* UpdateChecker.swift in Sources */,
 				D4914B21419604CF9748B699 /* Settings.swift in Sources */,
 				E89579E60A998E4B07EF2A57 /* SettingsView.swift in Sources */,
 				D8DA6D8A2A41A2B34A383F27 /* SwiftShotApp.swift in Sources */,
@@ -262,14 +266,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Sources/SwiftShot.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Sources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.luongcoder.SwiftShot;
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -410,14 +414,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Sources/SwiftShot.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Sources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.luongcoder.SwiftShot;
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;

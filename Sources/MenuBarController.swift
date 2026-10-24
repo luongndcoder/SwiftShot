@@ -125,6 +125,10 @@ final class MenuBarController {
         settingsItem.target = self
         menu.addItem(settingsItem)
 
+        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdatesAction), keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
+
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(title: "Quit SwiftShot", action: #selector(quitAction), keyEquivalent: "q")
@@ -136,6 +140,10 @@ final class MenuBarController {
 
     @objc private func captureAction() {
         appState?.startRegionCapture()
+    }
+
+    @objc private func checkForUpdatesAction() {
+        appState?.checkForUpdates()
     }
 
     @objc private func recordFullAction() {

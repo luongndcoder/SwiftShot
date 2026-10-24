@@ -100,6 +100,19 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Updates") {
+                Toggle("Automatically check for updates", isOn: $settings.autoCheckForUpdates)
+                HStack {
+                    Text("Current version: \(UpdateChecker.shared.currentVersion)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Check Now…") {
+                        UpdateChecker.shared.check(manual: true)
+                    }
+                }
+            }
+
             Section("Color Presets") {
                 if settings.customColors.isEmpty {
                     Text("No presets yet — pick a color in the capture toolbar and press + to add it.")
