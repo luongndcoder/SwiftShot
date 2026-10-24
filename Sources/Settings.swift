@@ -25,6 +25,7 @@ final class Settings: ObservableObject {
         static let showMagnifier = "showMagnifier"
         static let selectionOpacity = "selectionOpacity"
         static let recordSystemAudio = "recordSystemAudio"
+        static let autoCheckForUpdates = "autoCheckForUpdates"
     }
 
     /// Default global hotkey: ⇧⌘4 (Command + Shift + 4), same as the native macOS region capture.
@@ -130,6 +131,13 @@ final class Settings: ObservableObject {
         didSet { defaults.set(recordSystemAudio, forKey: Key.recordSystemAudio) }
     }
 
+    // MARK: - Updates
+
+    /// Checks GitHub Releases once a day for a newer version.
+    @Published var autoCheckForUpdates: Bool = true {
+        didSet { defaults.set(autoCheckForUpdates, forKey: Key.autoCheckForUpdates) }
+    }
+
     private let defaults = UserDefaults.standard
 
     init() {
@@ -168,6 +176,7 @@ final class Settings: ObservableObject {
         showMagnifier = defaults.object(forKey: Key.showMagnifier) as? Bool ?? true
         selectionOpacity = defaults.object(forKey: Key.selectionOpacity) as? Double ?? 0.35
         recordSystemAudio = defaults.object(forKey: Key.recordSystemAudio) as? Bool ?? true
+        autoCheckForUpdates = defaults.object(forKey: Key.autoCheckForUpdates) as? Bool ?? true
     }
 
     // MARK: - Region coding

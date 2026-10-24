@@ -62,6 +62,15 @@ final class AppState: ObservableObject {
         recorder.onError = { [weak self] message in
             self?.menuBar.showError(message)
         }
+
+        if settings.autoCheckForUpdates {
+            UpdateChecker.shared.checkAutomaticallyIfDue()
+        }
+    }
+
+    /// Manual update check, triggered from the menu bar.
+    func checkForUpdates() {
+        UpdateChecker.shared.check(manual: true)
     }
 
     /// Whether a screen recording is currently running (drives the menu).
