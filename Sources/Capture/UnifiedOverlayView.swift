@@ -682,8 +682,13 @@ final class UnifiedOverlayView: NSView {
         return PixelSampler.color(in: backgroundImage, at: pixel)
     }
 
+    /// Set once the HUD has played its entrance animation for this capture —
+    /// repositioning after a resize/move must be instant, not animated.
+    private var didRevealHUD = false
+
     private func positionHUD(for rect: CGRect) {
         guard let hud = hudView else { return }
+        let wasHidden = hud.isHidden
         hud.isHidden = false
 
         // Use the HUD's intrinsic size instead of a hardcoded width so the toolbar
@@ -706,8 +711,25 @@ final class UnifiedOverlayView: NSView {
         var hudX = rect.midX - hudWidth / 2
         hudX = max(10, min(hudX, bounds.maxX - hudWidth - 10))
 
-        hud.frame = CGRect(x: hudX, y: hudY, width: hudWidth, height: hudHeight)
-        hud.layoutSubtreeIfNeeded()
+        let targetFrame = CGRect(x: hudX, y: hudY, width: hudWidth, height: hudHeight)
+
+        if wasHidden && !didRevealHUD {
+            // Glass Pro entrance: fade in while settling 6pt into place.
+            didRevealHUD = true
+            hud.alphaValue = 0
+            hud.frame = targetFrame.offsetBy(dx: 0, dy: -6)
+            hud.layoutSubtreeIfNeeded()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.12
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                hud.animator().alphaValue = 1
+                hud.animator().frame = targetFrame
+            }
+        } else {
+            hud.alphaValue = 1
+            hud.frame = targetFrame
+            hud.layoutSubtreeIfNeeded()
+        }
     }
 
     // MARK: - Drawing
