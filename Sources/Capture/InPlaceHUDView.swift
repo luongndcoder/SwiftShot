@@ -14,6 +14,7 @@ final class InPlaceHUDView: NSView {
     enum Action {
         case selectTool(Annotation.Kind)
         case changeColor(NSColor)
+        case changeStrokeWidth(CGFloat)
         case addColorPreset
         case openColorPicker
         case eyedropper
@@ -28,13 +29,17 @@ final class InPlaceHUDView: NSView {
 
     private let onAction: (Action) -> Void
     private var toolButtons: [Annotation.Kind: TileButton] = [:]
+    private var colorButtons: [TileButton] = []
     private var currentTool: Annotation.Kind = .arrow
     private var currentColor: NSColor
+    private var currentStrokeWidth: CGFloat
     private var presetStack: NSStackView?
     private let statusLabel = NSTextField(labelWithString: "")
+    private let strokeWidthLabel = NSTextField(labelWithString: "")
 
-    init(initialColor: NSColor = .systemRed, presets: [NSColor] = [], onAction: @escaping (Action) -> Void) {
+    init(initialColor: NSColor = .systemRed, initialStrokeWidth: CGFloat = 3, presets: [NSColor] = [], onAction: @escaping (Action) -> Void) {
         self.currentColor = initialColor
+        self.currentStrokeWidth = initialStrokeWidth
         self.onAction = onAction
         super.init(frame: .zero)
         setupUI()
@@ -78,6 +83,7 @@ final class InPlaceHUDView: NSView {
         ])
 
         selectTool(.arrow)
+        refreshColorSelection()
     }
 
     /// Row 1: the drawing tools, grouped by purpose.
@@ -110,6 +116,26 @@ final class InPlaceHUDView: NSView {
         row.addArrangedSubview(createToolButton(.blur, symbol: "drop", name: "Blur"))
         row.addArrangedSubview(createToolButton(.pixelate, symbol: "square.grid.3x3", name: "Pixelate"))
         row.addArrangedSubview(createToolButton(.invert, symbol: "circle.lefthalf.filled.inverse", name: "Invert Colors"))
+        row.addArrangedSubview(makeSeparator())
+
+        // Group 5 — stroke width (also adjustable with the scroll wheel)
+        row.addArrangedSubview(createIconButton(
+            symbol: "minus", name: "Thinner stroke", tint: .labelColor
+        ) { [weak self] in
+            self?.adjustStrokeWidth(by: -1)
+        })
+        strokeWidthLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+        strokeWidthLabel.textColor = .labelColor
+        strokeWidthLabel.alignment = .center
+        strokeWidthLabel.toolTip = "Stroke width"
+        strokeWidthLabel.widthAnchor.constraint(equalToConstant: 26).isActive = true
+        row.addArrangedSubview(strokeWidthLabel)
+        row.addArrangedSubview(createIconButton(
+            symbol: "plus", name: "Thicker stroke", tint: .labelColor
+        ) { [weak self] in
+            self?.adjustStrokeWidth(by: 1)
+        })
+        updateStrokeWidthLabel()
 
         return row
     }
@@ -220,11 +246,51 @@ final class InPlaceHUDView: NSView {
         for color in colors {
             presetStack.addArrangedSubview(createColorButton(color: color, name: "Preset colour"))
         }
+        refreshColorSelection()
     }
 
     func changeColor(_ color: NSColor) {
         currentColor = color
+        refreshColorSelection()
         onAction(.changeColor(color))
+    }
+
+    /// Updates the stroke width display without firing an action — used when the
+    /// width changes elsewhere (the scroll wheel on the canvas).
+    func setStrokeWidth(_ width: CGFloat) {
+        currentStrokeWidth = min(max(width, 1), 20)
+        updateStrokeWidthLabel()
+    }
+
+    private func adjustStrokeWidth(by delta: CGFloat) {
+        setStrokeWidth(currentStrokeWidth + delta)
+        onAction(.changeStrokeWidth(currentStrokeWidth))
+    }
+
+    private func updateStrokeWidthLabel() {
+        if currentStrokeWidth == currentStrokeWidth.rounded() {
+            strokeWidthLabel.stringValue = "\(Int(currentStrokeWidth))"
+        } else {
+            strokeWidthLabel.stringValue = String(format: "%.1f", currentStrokeWidth)
+        }
+    }
+
+    /// Highlights the palette swatch that matches the current colour.
+    private func refreshColorSelection() {
+        for btn in colorButtons where btn.superview != nil {
+            btn.isActive = Self.colorsMatch(btn.swatchColor, currentColor)
+        }
+    }
+
+    private static func colorsMatch(_ a: NSColor, _ b: NSColor) -> Bool {
+        guard let aRGB = a.usingColorSpace(.deviceRGB),
+              let bRGB = b.usingColorSpace(.deviceRGB) else {
+            return a == b
+        }
+        return abs(aRGB.redComponent - bRGB.redComponent) < 0.02
+            && abs(aRGB.greenComponent - bRGB.greenComponent) < 0.02
+            && abs(aRGB.blueComponent - bRGB.blueComponent) < 0.02
+            && abs(aRGB.alphaComponent - bRGB.alphaComponent) < 0.02
     }
 
     func selectTool(_ tool: Annotation.Kind) {
@@ -283,6 +349,7 @@ final class InPlaceHUDView: NSView {
     @objc private func colorPanelChanged(_ sender: NSColorPanel) {
         let color = sender.color
         currentColor = color
+        refreshColorSelection()
         onAction(.changeColor(color))
     }
 
@@ -322,10 +389,13 @@ final class InPlaceHUDView: NSView {
     }
 
     private func createColorButton(color: NSColor, name: String) -> NSButton {
-        let btn = TileButton(image: NSImage(), name: name, action: {}, size: 22)
+        let btn = TileButton(image: NSImage(), name: name, action: { [weak self] in
+            self?.changeColor(color)
+        }, size: 22)
         btn.isColorSwatch = true
         btn.swatchColor = color
         btn.contentTintColor = .labelColor
+        colorButtons.append(btn)
         return btn
     }
 
@@ -422,8 +492,17 @@ final class TileButton: NSButton {
 
         if isColorSwatch {
             layer?.backgroundColor = swatchColor.cgColor
-            layer?.borderColor = NSColor.white.withAlphaComponent(0.45).cgColor
-            layer?.borderWidth = 1.5
+            if isActive {
+                // The currently selected colour gets a thick bright ring.
+                layer?.borderColor = NSColor.white.cgColor
+                layer?.borderWidth = 3
+            } else if hoverActive {
+                layer?.borderColor = NSColor.white.withAlphaComponent(0.85).cgColor
+                layer?.borderWidth = 2
+            } else {
+                layer?.borderColor = NSColor.white.withAlphaComponent(0.45).cgColor
+                layer?.borderWidth = 1.5
+            }
             return
         }
 
