@@ -39,6 +39,12 @@ final class UnifiedOverlayView: NSView {
     private var currentCounter = 1
     /// Index of the annotation the user selected (Delete removes it).
     private var selectedAnnotationIndex: Int?
+    /// Set while the user drags a selected annotation to a new position with
+    /// the Select tool: the index, the drag start point and the annotation as
+    /// it was when the drag began (moves are computed from this snapshot).
+    private var movingAnnotationIndex: Int?
+    private var annotationDragStartPoint: CGPoint = .zero
+    private var annotationDragOriginal: Annotation?
     /// While active the next click picks a colour from the captured screen.
     private var isEyedropperActive = false
     /// Opacity of the dimmed area outside of the selection.
@@ -104,7 +110,7 @@ final class UnifiedOverlayView: NSView {
     }
 
     private func setupHUD() {
-        let hud = InPlaceHUDView(initialColor: currentColor) { [weak self] action in
+        let hud = InPlaceHUDView(initialColor: currentColor, initialStrokeWidth: strokeWidth) { [weak self] action in
             self?.handleHUDAction(action)
         }
         hud.isHidden = true
@@ -145,6 +151,8 @@ final class UnifiedOverlayView: NSView {
             isEyedropperActive = false
         case .changeColor(let color):
             currentColor = color
+        case .changeStrokeWidth(let width):
+            strokeWidth = width
         case .addColorPreset:
             onAddColorPreset?(currentColor)
         case .openColorPicker:
@@ -218,9 +226,12 @@ final class UnifiedOverlayView: NSView {
         }
 
         // 4. With the selection tool, clicking an existing annotation selects it
-        //    (Delete then removes it).
+        //    (Delete then removes it) and dragging moves it.
         if selectedTool == .select, sel.contains(point), let index = hitTestAnnotation(at: point) {
             selectedAnnotationIndex = index
+            movingAnnotationIndex = index
+            annotationDragStartPoint = point
+            annotationDragOriginal = annotations[index]
             needsDisplay = true
             return
         }
@@ -289,6 +300,21 @@ final class UnifiedOverlayView: NSView {
             return
         }
 
+        // Dragging the selected annotation to a new position (Select tool).
+        if let index = movingAnnotationIndex,
+           annotations.indices.contains(index),
+           let original = annotationDragOriginal,
+           let sel = selectionRect {
+            annotations[index] = Self.moved(
+                original,
+                by: CGPoint(x: current.x - annotationDragStartPoint.x,
+                            y: current.y - annotationDragStartPoint.y),
+                within: sel
+            )
+            needsDisplay = true
+            return
+        }
+
         // Drawing dragged
         if var ann = currentAnnotation {
             let constrain = event.modifierFlags.contains(.control)
@@ -340,6 +366,13 @@ final class UnifiedOverlayView: NSView {
             if let sel = selectionRect {
                 positionHUD(for: sel)
             }
+            needsDisplay = true
+            return
+        }
+
+        if movingAnnotationIndex != nil {
+            movingAnnotationIndex = nil
+            annotationDragOriginal = nil
             needsDisplay = true
             return
         }
@@ -1095,6 +1128,7 @@ final class UnifiedOverlayView: NSView {
         } else {
             strokeWidth = max(strokeWidth - 0.5, 1)
         }
+        hudView?.setStrokeWidth(strokeWidth)
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -1309,6 +1343,35 @@ final class UnifiedOverlayView: NSView {
         default:
             super.keyDown(with: event)
         }
+    }
+
+    /// Returns `annotation` shifted by `delta`, clamped so the shape stays
+    /// inside `limit` (annotations are clipped to the selection when drawn, so
+    /// an unclamped move could push a shape out of sight).
+    private static func moved(_ annotation: Annotation, by delta: CGPoint, within limit: CGRect) -> Annotation {
+        // The shape's extent comes from its endpoints and (for freehand paths)
+        // every recorded point — `bounds` alone is empty for counters.
+        var xs = [annotation.start.x, annotation.end.x]
+        var ys = [annotation.start.y, annotation.end.y]
+        xs += annotation.points.map(\.x)
+        ys += annotation.points.map(\.y)
+        guard let minX = xs.min(), let maxX = xs.max(),
+              let minY = ys.min(), let maxY = ys.max() else { return annotation }
+
+        func clamped(_ value: CGFloat, _ low: CGFloat, _ high: CGFloat) -> CGFloat {
+            // If the shape is larger than the limit on this axis, don't move it.
+            guard low <= high else { return 0 }
+            return min(max(value, low), high)
+        }
+        let dx = clamped(delta.x, limit.minX - minX, limit.maxX - maxX)
+        let dy = clamped(delta.y, limit.minY - minY, limit.maxY - maxY)
+        guard dx != 0 || dy != 0 else { return annotation }
+
+        var result = annotation
+        result.start = CGPoint(x: annotation.start.x + dx, y: annotation.start.y + dy)
+        result.end = CGPoint(x: annotation.end.x + dx, y: annotation.end.y + dy)
+        result.points = annotation.points.map { CGPoint(x: $0.x + dx, y: $0.y + dy) }
+        return result
     }
 
     /// Removes the annotation the user selected and makes the removal undoable.
