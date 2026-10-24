@@ -39,6 +39,27 @@ final class ScreenshotService {
         }
     }
 
+    /// Resolves the screen under the mouse cursor and its matching `SCDisplay`
+    /// without capturing anything — used to start a screen recording.
+    func screenAndDisplayAtMouse() async -> (screen: NSScreen, display: SCDisplay)? {
+        let mouseLoc = NSEvent.mouseLocation
+        let targetScreen = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+        guard let screen = targetScreen else { return nil }
+
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+            guard let display = Self.matchDisplay(for: screen, in: content.displays) else {
+                return nil
+            }
+            return (screen, display)
+        } catch {
+            NSLog("[SwiftShot] screenAndDisplayAtMouse failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     /// Captures a screen (or a region of it) without any user interaction.
     ///
     /// Used by the MCP bridge so that AI agents can take screenshots through the

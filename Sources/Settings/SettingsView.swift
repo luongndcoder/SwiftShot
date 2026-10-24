@@ -93,6 +93,13 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Recording") {
+                Toggle("Record system audio", isOn: $settings.recordSystemAudio)
+                Text("Recordings are saved as MP4 (H.264) in the save folder, at the display's native resolution and 60 fps. The microphone is not recorded.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Color Presets") {
                 if settings.customColors.isEmpty {
                     Text("No presets yet — pick a color in the capture toolbar and press + to add it.")

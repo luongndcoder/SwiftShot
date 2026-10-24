@@ -67,6 +67,12 @@ final class UnifiedOverlayView: NSView {
     /// Called when the user wants to store the current colour in the palette.
     var onAddColorPreset: ((NSColor) -> Void)?
 
+    /// When set, the view is in region-picking mode (used to choose the area
+    /// for a screen recording): the first completed selection is reported
+    /// through this callback instead of opening the annotation HUD, and no
+    /// drawing or finishing shortcuts are active.
+    var onRegionPicked: ((CGRect) -> Void)?
+
     /// The current selection rectangle — used when the capture is cancelled so the
     /// region can be remembered for the next capture.
     var currentSelection: CGRect? { selectionRect }
@@ -198,7 +204,7 @@ final class UnifiedOverlayView: NSView {
         }
 
         // 1. Double click inside the selection copies it (if enabled).
-        if event.clickCount == 2, let sel = selectionRect, sel.contains(point), copyOnDoubleClick {
+        if onRegionPicked == nil, event.clickCount == 2, let sel = selectionRect, sel.contains(point), copyOnDoubleClick {
             guard let img = renderCurrentSelectionImage() else { return }
             onFinishCapture(img, sel, .copy)
             return
@@ -354,6 +360,11 @@ final class UnifiedOverlayView: NSView {
             if sel.width < 5 && sel.height < 5 {
                 sel = bounds
                 selectionRect = sel
+            }
+            // Region-picking mode: report the region and finish — no HUD.
+            if let onRegionPicked {
+                onRegionPicked(sel)
+                return
             }
             positionHUD(for: sel)
             needsDisplay = true
@@ -1274,6 +1285,9 @@ final class UnifiedOverlayView: NSView {
             onCancel(selectionRect)
             return
         }
+
+        // Region-picking mode has no other shortcuts.
+        if onRegionPicked != nil { return }
 
         // 2. Enter: Copy to clipboard (or Cmd+C)
         if event.keyCode == UInt16(kVK_Return) {
