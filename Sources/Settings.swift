@@ -26,6 +26,8 @@ final class Settings: ObservableObject {
         static let selectionOpacity = "selectionOpacity"
         static let recordSystemAudio = "recordSystemAudio"
         static let autoCheckForUpdates = "autoCheckForUpdates"
+        static let autoZoomOnClicks = "autoZoomOnClicks"
+        static let autoZoomLevel = "autoZoomLevel"
     }
 
     /// Default global hotkey: ⇧⌘4 (Command + Shift + 4), same as the native macOS region capture.
@@ -131,6 +133,18 @@ final class Settings: ObservableObject {
         didSet { defaults.set(recordSystemAudio, forKey: Key.recordSystemAudio) }
     }
 
+    /// After a recording stops, renders an additional "-zoom" version whose
+    /// virtual camera zooms in on clicks (Cursorful-style). The original
+    /// file is always kept untouched.
+    @Published var autoZoomOnClicks: Bool = true {
+        didSet { defaults.set(autoZoomOnClicks, forKey: Key.autoZoomOnClicks) }
+    }
+
+    /// Magnification used by the auto-zoom pass (1.5 / 2.0 / 2.5).
+    @Published var autoZoomLevel: Double = 2.0 {
+        didSet { defaults.set(autoZoomLevel, forKey: Key.autoZoomLevel) }
+    }
+
     // MARK: - Updates
 
     /// Checks GitHub Releases once a day for a newer version.
@@ -176,6 +190,8 @@ final class Settings: ObservableObject {
         showMagnifier = defaults.object(forKey: Key.showMagnifier) as? Bool ?? true
         selectionOpacity = defaults.object(forKey: Key.selectionOpacity) as? Double ?? 0.35
         recordSystemAudio = defaults.object(forKey: Key.recordSystemAudio) as? Bool ?? true
+        autoZoomOnClicks = defaults.object(forKey: Key.autoZoomOnClicks) as? Bool ?? true
+        autoZoomLevel = defaults.object(forKey: Key.autoZoomLevel) as? Double ?? 2.0
         autoCheckForUpdates = defaults.object(forKey: Key.autoCheckForUpdates) as? Bool ?? true
     }
 

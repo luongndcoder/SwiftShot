@@ -98,6 +98,17 @@ struct SettingsView: View {
                 Text("Recordings are saved as MP4 (H.264) in the save folder, at the display's native resolution and 60 fps. The microphone is not recorded.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Toggle("Auto-zoom on clicks", isOn: $settings.autoZoomOnClicks)
+                if settings.autoZoomOnClicks {
+                    Picker("Zoom level", selection: $settings.autoZoomLevel) {
+                        Text("1.5×").tag(1.5)
+                        Text("2.0×").tag(2.0)
+                        Text("2.5×").tag(2.5)
+                    }
+                    Text("When a recording stops, an extra version is rendered with a “-zoom” suffix: its camera glides in on every click and back out when things go quiet, Cursorful-style. The original recording is kept as-is.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("Updates") {

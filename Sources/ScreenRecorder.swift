@@ -37,6 +37,16 @@ final class ScreenRecorder: NSObject {
     private var sessionStarted = false
     private var isStopping = false
 
+    // MARK: - Cursor tracking (for the auto-zoom pass)
+
+    /// The cursor track of the most recent recording, consumed by
+    /// `ZoomExporter`. Positions are normalized to the capture area.
+    private(set) var lastCursorTrack: CursorTrack?
+    private var cursorTimer: DispatchSourceTimer?
+    private let cursorQueue = DispatchQueue(label: "dev.luongcoder.SwiftShot.recorder.cursor")
+    private var cursorSamples: [CursorTrack.Moment] = []
+    private var cursorClicks: [CursorTrack.Moment] = []
+
     /// Serial queue for the stream outputs — keeps every writer access in order.
     private let sampleQueue = DispatchQueue(label: "dev.luongcoder.SwiftShot.recorder.samples")
 
@@ -113,6 +123,74 @@ final class ScreenRecorder: NSObject {
         try await stream.startCapture()
         startedAt = Date()
         setRecording(true)
+        startCursorTracking(display: display, displayPointSize: displayPointSize, region: region)
+    }
+
+    // MARK: - Cursor tracking
+
+    /// Builds the mapping from global mouse locations (AppKit points,
+    /// bottom-left origin across all displays) into the capture area's
+    /// normalized space (0…1, top-left origin), or `nil` when the display
+    /// cannot be matched to an `NSScreen`.
+    private func makeTrackMapping(
+        display: SCDisplay, displayPointSize: CGSize, region: CGRect?
+    ) -> ((CGPoint) -> CGPoint?)? {
+        guard let screen = NSScreen.screens.first(where: {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == display.displayID
+        }) else { return nil }
+        let displayFrame = screen.frame
+        // Display-local capture rect, bottom-left origin (the recorder's
+        // own convention for `region`).
+        let capture = region ?? CGRect(origin: .zero, size: displayPointSize)
+        return { global in
+            let nx = (global.x - displayFrame.minX - capture.minX) / capture.width
+            let ny = 1 - (global.y - displayFrame.minY - capture.minY) / capture.height
+            // A little slack: a cursor just outside the area still belongs to
+            // the recording's story, clamped to the edge.
+            guard nx >= -0.05, nx <= 1.05, ny >= -0.05, ny <= 1.05 else { return nil }
+            return CGPoint(x: min(1, max(0, nx)), y: min(1, max(0, ny)))
+        }
+    }
+
+    /// Samples the cursor at ~125 Hz and detects clicks by polling the mouse
+    /// button state — no event taps, no extra permissions.
+    private func startCursorTracking(display: SCDisplay, displayPointSize: CGSize, region: CGRect?) {
+        lastCursorTrack = nil
+        guard let mapping = makeTrackMapping(display: display, displayPointSize: displayPointSize, region: region)
+        else { return }
+        cursorQueue.sync {
+            cursorSamples = []
+            cursorClicks = []
+        }
+        var wasPressed = false
+        let timer = DispatchSource.makeTimerSource(queue: cursorQueue)
+        timer.schedule(deadline: .now(), repeating: .milliseconds(8), leeway: .milliseconds(2))
+        timer.setEventHandler { [weak self] in
+            guard let self, let startedAt = self.startedAt else { return }
+            guard let point = mapping(NSEvent.mouseLocation) else { return }
+            // Safety cap (~65 minutes at 125 Hz) so a forgotten recording
+            // cannot grow the track without bound.
+            guard self.cursorSamples.count < 500_000 else { return }
+            let t = Date().timeIntervalSince(startedAt)
+            self.cursorSamples.append(CursorTrack.Moment(time: t, point: point))
+            let pressed = NSEvent.pressedMouseButtons & 1 != 0
+            if pressed && !wasPressed {
+                self.cursorClicks.append(CursorTrack.Moment(time: t, point: point))
+            }
+            wasPressed = pressed
+        }
+        timer.resume()
+        cursorTimer = timer
+    }
+
+    private func stopCursorTracking() {
+        cursorTimer?.cancel()
+        cursorTimer = nil
+        let snapshot: (samples: [CursorTrack.Moment], clicks: [CursorTrack.Moment]) =
+            cursorQueue.sync { (cursorSamples, cursorClicks) }
+        if !snapshot.samples.isEmpty {
+            lastCursorTrack = CursorTrack(samples: snapshot.samples, clicks: snapshot.clicks)
+        }
     }
 
     private func setupWriter(outputURL: URL, width: Int, height: Int, includeAudio: Bool) throws {
@@ -170,6 +248,7 @@ final class ScreenRecorder: NSObject {
         guard isRecording, let stream else { return }
         isStopping = true
         setRecording(false)
+        stopCursorTracking()
 
         try? await stream.stopCapture()
         self.stream = nil

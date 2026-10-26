@@ -31,6 +31,8 @@ final class AppState: ObservableObject {
     /// The screen the current capture belongs to (needed to map the selection
     /// rectangle between view and screen coordinates).
     private var currentScreen: NSScreen?
+    /// The in-flight auto-zoom render, if any (kept alive until it reports).
+    private var zoomExporter: ZoomExporter?
 
     init() {
         AppState.shared = self
@@ -58,6 +60,7 @@ final class AppState: ObservableObject {
             } else {
                 self.menuBar.showTransient("Recording saved to \(url.lastPathComponent)")
             }
+            self.startZoomExportIfEnabled(for: url)
         }
         recorder.onError = { [weak self] message in
             self?.menuBar.showError(message)
@@ -71,6 +74,34 @@ final class AppState: ObservableObject {
     /// Manual update check, triggered from the menu bar.
     func checkForUpdates() {
         UpdateChecker.shared.check(manual: true)
+    }
+
+    /// Renders the Cursorful-style zoom version of a finished recording when
+    /// the setting is on and the recording contains at least one click.
+    private func startZoomExportIfEnabled(for url: URL) {
+        guard settings.autoZoomOnClicks,
+              let track = recorder.lastCursorTrack,
+              !track.clicks.isEmpty else { return }
+
+        var zoomURL = url.deletingPathExtension()
+        zoomURL = URL(fileURLWithPath: zoomURL.path + "-zoom").appendingPathExtension(url.pathExtension)
+
+        let exporter = ZoomExporter()
+        zoomExporter = exporter
+        menuBar.showTransient("Rendering zoom version…")
+        exporter.export(input: url, output: zoomURL, track: track, zoomLevel: settings.autoZoomLevel) { [weak self] result in
+            guard let self else { return }
+            self.zoomExporter = nil
+            switch result {
+            case .success(let output):
+                self.menuBar.showTransient("Zoom version saved to \(output.lastPathComponent)")
+            case .failure(let error):
+                // A recording too short to zoom is not an error worth a dialog.
+                if (error as? ZoomExportError) != .tooShort {
+                    self.menuBar.showError("The zoom version could not be rendered")
+                }
+            }
+        }
     }
 
     /// Whether a screen recording is currently running (drives the menu).
