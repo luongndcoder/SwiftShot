@@ -72,8 +72,13 @@ struct TranslationPanelView: View {
                 Spacer()
 
                 if isLoading {
-                    ProgressView()
-                        .controlSize(.small)
+                    HStack(spacing: 5) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Đang dịch…")
+                            .font(.caption2.weight(.medium))
+                            .foregroundColor(.green)
+                    }
                 }
             }
 
@@ -129,8 +134,18 @@ struct TranslationPanelView: View {
                                 .foregroundColor(.red)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(6)
+                        } else if isLoading {
+                            VStack(spacing: 10) {
+                                ProgressView()
+                                    .controlSize(.regular)
+                                Text("Đang nhận diện chữ & dịch thuật…")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 88, alignment: .center)
+                            .padding(6)
                         } else {
-                            Text(translatedText.isEmpty ? (isLoading ? "Translating…" : "(Waiting for translation)") : translatedText)
+                            Text(translatedText.isEmpty ? "(Chưa có kết quả dịch)" : translatedText)
                                 .font(.system(size: 13))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(6)

@@ -22,6 +22,7 @@ final class InPlaceHUDView: NSView {
         case redo
         case pin
         case translate
+        case copyText
         case copy
         case save
         case saveAs
@@ -189,13 +190,14 @@ final class InPlaceHUDView: NSView {
         stack.orientation = .horizontal
         stack.spacing = 2
         stack.alignment = .centerY
-        stack.edgeInsets = NSEdgeInsets(top: 3, left: 3, bottom: 3, right: 3)
+        stack.edgeInsets = NSEdgeInsets(top: 2, left: 4, bottom: 2, right: 4)
 
         let pill = NSView()
         pill.wantsLayer = true
-        pill.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.07).cgColor
-        pill.layer?.cornerRadius = 11
-        pill.layer?.borderColor = NSColor.white.withAlphaComponent(0.05).cgColor
+        pill.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.08).cgColor
+        pill.layer?.cornerRadius = 10
+        pill.layer?.masksToBounds = true
+        pill.layer?.borderColor = NSColor.white.withAlphaComponent(0.10).cgColor
         pill.layer?.borderWidth = 1
         pill.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -272,7 +274,7 @@ final class InPlaceHUDView: NSView {
             }
         ]))
 
-        // Finish actions in one pill
+        // AI & OCR tools in one pill
         row.addArrangedSubview(makeGroupPill([
             createIconButton(
                 symbol: "character.bubble.fill", name: "Translate text in selection", tint: .systemGreen
@@ -280,12 +282,21 @@ final class InPlaceHUDView: NSView {
                 self?.onAction(.translate)
             },
             createIconButton(
+                symbol: "text.viewfinder", name: "Extract & Copy text (OCR)", tint: .systemTeal
+            ) { [weak self] in
+                self?.onAction(.copyText)
+            }
+        ]))
+
+        // Export actions in one pill
+        row.addArrangedSubview(makeGroupPill([
+            createIconButton(
                 symbol: "pin.fill", name: "Pin to screen (⌘P)", tint: .systemYellow
             ) { [weak self] in
                 self?.onAction(.pin)
             },
             createIconButton(
-                symbol: "doc.on.clipboard.fill", name: "Copy (⌘C / Enter)", tint: .systemTeal
+                symbol: "doc.on.clipboard.fill", name: "Copy (⌘C / Enter)", tint: .labelColor
             ) { [weak self] in
                 self?.onAction(.copy)
             },
@@ -298,7 +309,11 @@ final class InPlaceHUDView: NSView {
                 symbol: "square.and.arrow.down.on.square", name: "Save as… (⇧⌘S)", tint: .systemBlue
             ) { [weak self] in
                 self?.onAction(.saveAs)
-            },
+            }
+        ]))
+
+        // Cancel action in its own pill
+        row.addArrangedSubview(makeGroupPill([
             createIconButton(
                 symbol: "xmark", name: "Cancel (Esc)", tint: .systemRed
             ) { [weak self] in
@@ -322,6 +337,16 @@ final class InPlaceHUDView: NSView {
             presetStack.addArrangedSubview(createColorButton(color: color, name: "Preset colour"))
         }
         refreshColorSelection()
+    }
+
+    func setTranslating(_ translating: Bool) {
+        if translating {
+            statusLabel.stringValue = "⏳ Đang nhận diện & dịch thuật…"
+            statusLabel.textColor = .systemGreen
+        } else {
+            statusLabel.stringValue = ""
+            statusLabel.textColor = .secondaryLabelColor
+        }
     }
 
     func changeColor(_ color: NSColor) {
@@ -445,10 +470,9 @@ final class InPlaceHUDView: NSView {
         action: @escaping () -> Void
     ) -> TileButton {
         let image = NSImage(systemSymbolName: symbol, accessibilityDescription: name) ?? NSImage()
-        // A slightly larger, semibold symbol reads much better in a 32pt tile.
-        let configuration = NSImage.SymbolConfiguration(pointSize: 16, weight: .semibold)
+        let configuration = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
         let sized = image.withSymbolConfiguration(configuration) ?? image
-        let btn = TileButton(image: sized, name: name, action: action)
+        let btn = TileButton(image: sized, name: name, action: action, size: 28)
         btn.contentTintColor = tint
         btn.onHover = { [weak self] hovered in
             guard let self else { return }
@@ -466,7 +490,7 @@ final class InPlaceHUDView: NSView {
     private func createColorButton(color: NSColor, name: String) -> NSButton {
         let btn = TileButton(image: NSImage(), name: name, action: { [weak self] in
             self?.changeColor(color)
-        }, size: 24)
+        }, size: 20)
         btn.isColorSwatch = true
         btn.swatchColor = color
         btn.contentTintColor = .labelColor
@@ -504,7 +528,7 @@ final class TileButton: NSButton {
     /// The tile's edge length (colour swatches are drawn as circles of it).
     private let tileSize: CGFloat
 
-    init(image: NSImage, name: String, action: @escaping () -> Void, size: CGFloat = 32) {
+    init(image: NSImage, name: String, action: @escaping () -> Void, size: CGFloat = 28) {
         self.actionClosure = action
         self.tileSize = size
         super.init(frame: .zero)
@@ -558,7 +582,6 @@ final class TileButton: NSButton {
     }
 
     private func updateAppearance() {
-        layer?.borderWidth = 1
         layer?.shadowOpacity = 0
 
         if isColorSwatch {
@@ -566,34 +589,36 @@ final class TileButton: NSButton {
             layer?.cornerRadius = tileSize / 2
             layer?.backgroundColor = swatchColor.cgColor
             if isActive {
-                // The currently selected colour gets a thick bright ring.
+                // The currently selected colour gets a clean bright ring.
                 layer?.borderColor = NSColor.white.cgColor
-                layer?.borderWidth = 3
+                layer?.borderWidth = 2
             } else if hoverActive {
                 layer?.borderColor = NSColor.white.withAlphaComponent(0.85).cgColor
-                layer?.borderWidth = 2
-            } else {
-                layer?.borderColor = NSColor.white.withAlphaComponent(0.45).cgColor
                 layer?.borderWidth = 1.5
+            } else {
+                layer?.borderColor = NSColor.white.withAlphaComponent(0.30).cgColor
+                layer?.borderWidth = 1
             }
             return
         }
 
-        layer?.cornerRadius = 9
+        layer?.cornerRadius = 7
         if isActive {
-            layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.9).cgColor
-            layer?.borderColor = NSColor.white.withAlphaComponent(0.45).cgColor
-            // A soft blue glow lifts the active tool off the glass.
+            layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.85).cgColor
+            layer?.borderColor = NSColor.white.withAlphaComponent(0.40).cgColor
+            layer?.borderWidth = 1
             layer?.shadowColor = NSColor.systemBlue.cgColor
-            layer?.shadowOpacity = 0.55
-            layer?.shadowRadius = 7
+            layer?.shadowOpacity = 0.4
+            layer?.shadowRadius = 4
             layer?.shadowOffset = CGSize(width: 0, height: -1)
         } else if hoverActive {
-            layer?.backgroundColor = NSColor.white.withAlphaComponent(0.2).cgColor
-            layer?.borderColor = NSColor.white.withAlphaComponent(0.28).cgColor
+            layer?.backgroundColor = NSColor.white.withAlphaComponent(0.18).cgColor
+            layer?.borderColor = NSColor.white.withAlphaComponent(0.25).cgColor
+            layer?.borderWidth = 1
         } else {
             layer?.backgroundColor = NSColor.clear.cgColor
             layer?.borderColor = NSColor.clear.cgColor
+            layer?.borderWidth = 0
         }
     }
 }

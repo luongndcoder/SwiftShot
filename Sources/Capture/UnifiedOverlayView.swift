@@ -60,7 +60,61 @@ final class UnifiedOverlayView: NSView {
     private var magnifierView: MagnifierView?
     private var translationPanel: TranslationPanelController?
     private var translatedBlocks: [TranslatedBlock]?
+    private var textExtractPanel: TextExtractPanelController?
+    private var extractedOCRBlocks: [RecognizedTextBlock]?
     var settings: Settings = Settings()
+
+    private lazy var translationLoadingPill: NSView = {
+        let pill = NSView()
+        pill.wantsLayer = true
+        pill.layer?.cornerRadius = 18
+        pill.layer?.masksToBounds = false
+        pill.layer?.shadowColor = NSColor.black.cgColor
+        pill.layer?.shadowOpacity = 0.5
+        pill.layer?.shadowOffset = CGSize(width: 0, height: -2)
+        pill.layer?.shadowRadius = 8
+
+        let glass = NSVisualEffectView()
+        glass.material = .hudWindow
+        glass.blendingMode = .withinWindow
+        glass.state = .active
+        glass.appearance = NSAppearance(named: .darkAqua)
+        glass.wantsLayer = true
+        glass.layer?.cornerRadius = 18
+        glass.layer?.masksToBounds = true
+        glass.layer?.borderWidth = 1
+        glass.layer?.borderColor = NSColor.white.withAlphaComponent(0.2).cgColor
+        pill.addSubview(glass)
+        glass.autoresizingMask = [.width, .height]
+
+        let stack = NSStackView()
+        stack.orientation = .horizontal
+        stack.spacing = 8
+        stack.alignment = .centerY
+        stack.edgeInsets = NSEdgeInsets(top: 6, left: 14, bottom: 6, right: 14)
+
+        let spinner = NSProgressIndicator()
+        spinner.style = .spinning
+        spinner.controlSize = .small
+        spinner.appearance = NSAppearance(named: .darkAqua)
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.widthAnchor.constraint(equalToConstant: 16).isActive = true
+        spinner.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        spinner.startAnimation(nil)
+        stack.addArrangedSubview(spinner)
+
+        let label = NSTextField(labelWithString: "Đang nhận diện & dịch…")
+        label.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        label.textColor = .white
+        stack.addArrangedSubview(label)
+
+        pill.addSubview(stack)
+        stack.autoresizingMask = [.width, .height]
+
+        pill.isHidden = true
+        addSubview(pill)
+        return pill
+    }()
 
     // Callbacks
     private let onFinishCapture: (NSImage, CGRect, CaptureAction) -> Void
@@ -177,27 +231,41 @@ final class UnifiedOverlayView: NSView {
             guard let img = renderCurrentSelectionImage(), let sel = selectionRect else { return }
             translationPanel?.closePanel()
             translationPanel = nil
+            textExtractPanel?.closePanel()
+            textExtractPanel = nil
             onPinCapture(img, sel)
         case .translate:
             startTranslation()
+        case .copyText:
+            startTextExtraction()
         case .copy:
             guard let img = renderCurrentSelectionImage(), let sel = selectionRect else { return }
             translationPanel?.closePanel()
             translationPanel = nil
+            textExtractPanel?.closePanel()
+            textExtractPanel = nil
             onFinishCapture(img, sel, .copy)
         case .save:
             guard let img = renderCurrentSelectionImage(), let sel = selectionRect else { return }
             translationPanel?.closePanel()
             translationPanel = nil
+            textExtractPanel?.closePanel()
+            textExtractPanel = nil
             onFinishCapture(img, sel, .save)
         case .saveAs:
             guard let img = renderCurrentSelectionImage(), let sel = selectionRect else { return }
             translationPanel?.closePanel()
             translationPanel = nil
+            textExtractPanel?.closePanel()
+            textExtractPanel = nil
             onFinishCapture(img, sel, .saveAs)
         case .cancel:
+            translationLoadingPill.isHidden = true
+            hudView?.setTranslating(false)
             translationPanel?.closePanel()
             translationPanel = nil
+            textExtractPanel?.closePanel()
+            textExtractPanel = nil
             onCancel(selectionRect)
         }
     }
@@ -213,6 +281,11 @@ final class UnifiedOverlayView: NSView {
 
         translationPanel?.closePanel()
         translationPanel = nil
+
+        // Show in-place loading indicator immediately
+        translationLoadingPill.frame = CGRect(x: sel.midX - 110, y: sel.midY - 18, width: 220, height: 36)
+        translationLoadingPill.isHidden = false
+        hudView?.setTranslating(true)
 
         var origin = CGPoint(x: sel.maxX + 12, y: sel.midY - 180)
         if let window = window, let screen = window.screen {
@@ -244,7 +317,9 @@ final class UnifiedOverlayView: NSView {
                 let ocrResult = try await OCRService.shared.recognizeText(in: cgImage)
                 guard !ocrResult.isEmpty else {
                     await MainActor.run {
-                        panel.setError("No text recognized in the selection.")
+                        self.translationLoadingPill.isHidden = true
+                        self.hudView?.setTranslating(false)
+                        panel.setError("Không tìm thấy văn bản trong vùng chọn.")
                     }
                     return
                 }
@@ -259,6 +334,8 @@ final class UnifiedOverlayView: NSView {
                 )
 
                 await MainActor.run {
+                    self.translationLoadingPill.isHidden = true
+                    self.hudView?.setTranslating(false)
                     panel.update(result: transResult)
                     // Automatically show overlay on image
                     self.translatedBlocks = transResult.blocks
@@ -266,6 +343,8 @@ final class UnifiedOverlayView: NSView {
                 }
             } catch {
                 await MainActor.run {
+                    self.translationLoadingPill.isHidden = true
+                    self.hudView?.setTranslating(false)
                     panel.setError(error.localizedDescription)
                 }
             }
@@ -313,6 +392,95 @@ final class UnifiedOverlayView: NSView {
 
             context.textPosition = CGPoint(x: textRect.minX, y: textRect.minY + (textRect.height - fontSize) * 0.5)
             CTLineDraw(ctLine, context)
+
+            context.restoreGState()
+        }
+    }
+
+    // MARK: - Text Extraction Workflow
+
+    private func startTextExtraction() {
+        guard let sel = selectionRect, sel.width > 20, sel.height > 20 else { return }
+        guard let image = renderCurrentSelectionImage(),
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return
+        }
+
+        textExtractPanel?.closePanel()
+        textExtractPanel = nil
+
+        // Show in-place loading indicator immediately
+        translationLoadingPill.frame = CGRect(x: sel.midX - 110, y: sel.midY - 18, width: 220, height: 36)
+        translationLoadingPill.isHidden = false
+        hudView?.setTranslating(true)
+
+        var origin = CGPoint(x: sel.maxX + 12, y: sel.midY - 190)
+        if let window = window, let screen = window.screen {
+            if origin.x + 450 > screen.frame.maxX {
+                origin.x = max(screen.frame.minX + 20, sel.minX - 452)
+            }
+            origin.y = max(screen.frame.minY + 20, min(origin.y, screen.frame.maxY - 400))
+        }
+
+        let panel = TextExtractPanelController(ocr: nil, at: origin)
+        panel.setLoading(true)
+        panel.onToggleHighlight = { [weak self] _ in
+            self?.needsDisplay = true
+        }
+        panel.onClosed = { [weak self] in
+            self?.textExtractPanel = nil
+            self?.extractedOCRBlocks = nil
+            self?.needsDisplay = true
+        }
+        panel.show()
+        self.textExtractPanel = panel
+
+        Task {
+            do {
+                let ocrResult = try await OCRService.shared.recognizeText(in: cgImage)
+                await MainActor.run {
+                    self.translationLoadingPill.isHidden = true
+                    self.hudView?.setTranslating(false)
+                    if ocrResult.isEmpty {
+                        panel.setError("Không tìm thấy văn bản nào trong vùng chọn.")
+                    } else {
+                        panel.update(ocr: ocrResult)
+                        self.extractedOCRBlocks = ocrResult.blocks
+                        self.needsDisplay = true
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.translationLoadingPill.isHidden = true
+                    self.hudView?.setTranslating(false)
+                    panel.setError(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func drawExtractedTextHighlights(in context: CGContext, selectionRect sel: CGRect) {
+        guard let blocks = extractedOCRBlocks, !blocks.isEmpty else { return }
+
+        for block in blocks {
+            let boxX = sel.origin.x + block.normalizedRect.origin.x * sel.width
+            let boxY = sel.origin.y + block.normalizedRect.origin.y * sel.height
+            let boxW = block.normalizedRect.width * sel.width
+            let boxH = block.normalizedRect.height * sel.height
+            let blockRect = CGRect(x: boxX, y: boxY, width: max(boxW, 20), height: max(boxH, 14))
+
+            context.saveGState()
+
+            let path = CGPath(roundedRect: blockRect.insetBy(dx: -2, dy: -1), cornerWidth: 3, cornerHeight: 3, transform: nil)
+            context.addPath(path)
+            context.setFillColor(NSColor.cyan.withAlphaComponent(0.12).cgColor)
+            context.fillPath()
+
+            context.addPath(path)
+            context.setStrokeColor(NSColor.cyan.withAlphaComponent(0.65).cgColor)
+            context.setLineWidth(1)
+            context.setLineDash(phase: 0, lengths: [4, 3])
+            context.strokePath()
 
             context.restoreGState()
         }
@@ -893,6 +1061,7 @@ final class UnifiedOverlayView: NSView {
             context.saveGState()
             context.clip(to: sel)
             drawTranslatedBlocks(in: context, selectionRect: sel)
+            drawExtractedTextHighlights(in: context, selectionRect: sel)
             for ann in annotations {
                 drawAnnotation(ann, in: context)
             }
