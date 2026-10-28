@@ -1,6 +1,20 @@
 import AppKit
 import SwiftUI
 
+/// Floating borderless glass panel supporting Esc dismissal and key status.
+private final class FloatingGlassPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 { // Esc
+            close()
+        } else {
+            super.keyDown(with: event)
+        }
+    }
+}
+
 /// Floating panel controller for inspecting and copying extracted OCR text.
 final class TextExtractPanelController: NSWindowController, NSWindowDelegate {
     var onClosed: (() -> Void)?
@@ -13,16 +27,14 @@ final class TextExtractPanelController: NSWindowController, NSWindowDelegate {
     init(ocr: OCRResult?, at origin: CGPoint) {
         self.currentOCR = ocr
 
-        let panel = NSPanel(
+        let panel = FloatingGlassPanel(
             contentRect: NSRect(origin: origin, size: CGSize(width: 440, height: 380)),
-            styleMask: [.nonactivatingPanel, .titled, .closable, .fullSizeContentView],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
         panel.level = .floating
         panel.isFloatingPanel = true
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
         panel.isOpaque = false
         panel.backgroundColor = .clear
@@ -101,6 +113,8 @@ final class TextExtractPanelController: NSWindowController, NSWindowDelegate {
         )
 
         let hosting = NSHostingView(rootView: contentView)
+        hosting.wantsLayer = true
+        hosting.layer?.backgroundColor = NSColor.clear.cgColor
         window?.contentView = hosting
     }
 }

@@ -177,9 +177,19 @@ struct TranslationPanelView: View {
                     .controlSize(.regular)
             }
         }
-        .padding(14)
+        .padding(16)
         .frame(width: 420)
-        .background(VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow))
+        .background(
+            ZStack {
+                VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
+                Color.black.opacity(0.18)
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
 
@@ -194,6 +204,9 @@ private struct VisualEffectBlur: NSViewRepresentable {
         view.blendingMode = blendingMode
         view.state = .active
         view.appearance = NSAppearance(named: .darkAqua)
+        view.wantsLayer = true
+        view.layer?.cornerRadius = 16
+        view.layer?.masksToBounds = true
         return view
     }
 

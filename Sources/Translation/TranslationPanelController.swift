@@ -1,6 +1,20 @@
 import AppKit
 import SwiftUI
 
+/// Floating borderless glass panel supporting Esc dismissal and key status.
+private final class FloatingGlassPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 { // Esc
+            close()
+        } else {
+            super.keyDown(with: event)
+        }
+    }
+}
+
 /// Floating panel controller displaying OCR and translation results.
 final class TranslationPanelController: NSWindowController, NSWindowDelegate {
     var onClosed: (() -> Void)?
@@ -21,16 +35,14 @@ final class TranslationPanelController: NSWindowController, NSWindowDelegate {
         self.settings = settings
         self.targetLang = settings.translationTargetLanguage
 
-        let panel = NSPanel(
+        let panel = FloatingGlassPanel(
             contentRect: NSRect(origin: origin, size: CGSize(width: 420, height: 360)),
-            styleMask: [.nonactivatingPanel, .titled, .closable, .fullSizeContentView],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
         panel.level = .floating
         panel.isFloatingPanel = true
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
         panel.isOpaque = false
         panel.backgroundColor = .clear
@@ -124,6 +136,8 @@ final class TranslationPanelController: NSWindowController, NSWindowDelegate {
         )
 
         let hosting = NSHostingView(rootView: contentView)
+        hosting.wantsLayer = true
+        hosting.layer?.backgroundColor = NSColor.clear.cgColor
         window?.contentView = hosting
     }
 
