@@ -80,6 +80,10 @@ final class MenuBarController {
         captureItem.target = self
         menu.addItem(captureItem)
 
+        let translateItem = NSMenuItem(title: "Capture & Translate…", action: #selector(captureAction), keyEquivalent: "")
+        translateItem.target = self
+        menu.addItem(translateItem)
+
         menu.addItem(.separator())
 
         if appState?.isRecordingNow == true {

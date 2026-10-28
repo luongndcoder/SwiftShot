@@ -21,6 +21,7 @@ final class InPlaceHUDView: NSView {
         case undo
         case redo
         case pin
+        case translate
         case copy
         case save
         case saveAs
@@ -273,6 +274,11 @@ final class InPlaceHUDView: NSView {
 
         // Finish actions in one pill
         row.addArrangedSubview(makeGroupPill([
+            createIconButton(
+                symbol: "character.bubble.fill", name: "Translate text in selection", tint: .systemGreen
+            ) { [weak self] in
+                self?.onAction(.translate)
+            },
             createIconButton(
                 symbol: "pin.fill", name: "Pin to screen (⌘P)", tint: .systemYellow
             ) { [weak self] in

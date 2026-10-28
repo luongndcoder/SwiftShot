@@ -45,6 +45,13 @@
   - 🎨 8-color quick palette, macOS Native Color Picker, and custom user color presets.
 - **📌 Pin to Desktop (`⌘P`)**: Turn any capture into an always-on-top, draggable, zoomable floating sticker.
 
+#### 🌐 OCR & In-Place Image Translation (New in v1.2.0)
+- **On-Device Apple Vision OCR**: Extracts text from any screenshot instantly with 100% privacy, high accuracy, and spatial bounding boxes.
+- **Google Translate (Free Default)**: Built-in translation using Google's public endpoint — works out of the box with zero API keys or configuration needed.
+- **OpenAI API Compatible**: Connect your OpenAI key or any compatible endpoint (OpenRouter, DeepSeek, LocalAI, Ollama) for context-aware AI translation (`gpt-4o-mini`, `gpt-4o`).
+- **In-Place Image Text Overlay**: Directly renders translated text blocks with rounded dark backdrops over the original text on the canvas — allowing you to copy (`⌘C`) or save (`⌘S`) the translated image directly!
+- **Interactive Floating Translation Panel**: Switch target languages on the fly, view side-by-side original & translated text, copy translated text, or toggle the image overlay.
+
 #### 🎥 Screen Recording (New in v1.2.0)
 - **Display & Region Recording**: Record your entire screen or a cropped area with low CPU overhead.
 - **System Audio Capture**: Directly captures clean system audio output via ScreenCaptureKit streams.
@@ -202,6 +209,13 @@ open SwiftShot.xcodeproj
   - 🔄 Đảo màu (Invert) (`I`): Tạo điểm nhấn tương phản cho chi tiết cần lưu ý.
   - 🎨 Bảng 8 màu chuẩn, macOS Color Picker và lưu bảng màu yêu thích (Custom Presets).
 - **📌 Ghim lên màn hình (`⌘P`)**: Biến vùng vừa chụp thành sticker nổi luôn ở trên cùng (Always-on-top), hỗ trợ kéo thả và cuộn chuột phóng to/thu nhỏ.
+
+#### 🌐 OCR & Dịch thuật trực tiếp trên ảnh (Mới trong v1.2.0)
+- **Nhận diện chữ on-device bằng Apple Vision**: Quét chữ từ ảnh chụp màn hình cực nhanh, hoàn toàn bảo mật và giữ nguyên toạ độ hiển thị của từng dòng chữ.
+- **Google Dịch miễn phí (Mặc định)**: Sử dụng endpoint dịch miễn phí của Google — chạy ngay lập tức không cần đăng ký tài khoản hay API key.
+- **Hỗ trợ OpenAI API & các bên tương thích**: Dễ dàng tích hợp OpenAI (`gpt-4o-mini`, `gpt-4o`), OpenRouter, DeepSeek, Ollama với Base URL và API key riêng.
+- **Dịch đè trực tiếp lên ảnh (In-Place Overlay)**: Vẽ các khối chữ đã dịch đè chính xác lên vị trí chữ gốc trên ảnh — cho phép bạn sao chép (`⌘C`) hoặc lưu (`⌘S`) ảnh đã dịch một cách tự nhiên!
+- **Bảng điều khiển dịch nổi**: Cho phép đổi ngôn ngữ đích linh hoạt, xem song ngữ bản gốc và bản dịch, sao chép nhanh và bật/tắt lớp phủ trên ảnh.
 
 #### 🎥 Quay video màn hình (Mới trong v1.2.0)
 - **Quay toàn màn hình hoặc theo vùng chọn**: Tối ưu hóa hiệu năng với ScreenCaptureKit, tiêu tốn cực ít tài nguyên CPU.

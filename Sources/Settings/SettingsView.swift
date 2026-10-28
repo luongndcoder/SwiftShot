@@ -111,6 +111,33 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Translation") {
+                Picker("Provider", selection: $settings.translationProvider) {
+                    ForEach(TranslationProvider.allCases) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+
+                Picker("Target Language", selection: $settings.translationTargetLanguage) {
+                    ForEach(TranslationLanguage.supported) { lang in
+                        Text(lang.name).tag(lang.code)
+                    }
+                }
+
+                if settings.translationProvider == .google {
+                    Text("Uses Google Translate's free public endpoint. Fast, on-device OCR via Apple Vision, zero API key required.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if settings.translationProvider == .openai {
+                    SecureField("OpenAI API Key", text: $settings.openaiApiKey)
+                    TextField("Base URL", text: $settings.openaiBaseURL)
+                    TextField("Model", text: $settings.openaiModel)
+                    Text("Compatible with OpenAI, OpenRouter, DeepSeek, LocalAI, etc.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Updates") {
                 Toggle("Automatically check for updates", isOn: $settings.autoCheckForUpdates)
                 HStack {
@@ -155,7 +182,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 480, height: 460)
+        .frame(width: 500, height: 540)
         .onAppear {
             recorder.onCapture = { [settings] combo in
                 settings.hotkey = combo

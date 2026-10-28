@@ -25,6 +25,7 @@ final class ScreenshotOverlayController {
         dimOpacity: Double = 0.35,
         showMagnifier: Bool = true,
         copyOnDoubleClick: Bool = true,
+        settings: Settings = Settings(),
         onComplete: @escaping (NSImage, CGRect, CaptureAction) -> Void,
         onPin: @escaping (NSImage, CGRect) -> Void,
         onCancel: @escaping (CGRect?) -> Void,
@@ -57,6 +58,7 @@ final class ScreenshotOverlayController {
             }
         )
         overlayView.onAddColorPreset = onAddColorPreset
+        overlayView.settings = settings
         if onRegionPicked != nil {
             overlayView.onRegionPicked = { [weak self] rect in
                 self?.regionPicked(rect)

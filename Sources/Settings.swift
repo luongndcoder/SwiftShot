@@ -28,6 +28,11 @@ final class Settings: ObservableObject {
         static let autoCheckForUpdates = "autoCheckForUpdates"
         static let autoZoomOnClicks = "autoZoomOnClicks"
         static let autoZoomLevel = "autoZoomLevel"
+        static let translationProvider = "translationProvider"
+        static let translationTargetLanguage = "translationTargetLanguage"
+        static let openaiApiKey = "openaiApiKey"
+        static let openaiBaseURL = "openaiBaseURL"
+        static let openaiModel = "openaiModel"
     }
 
     /// Default global hotkey: ⇧⌘4 (Command + Shift + 4), same as the native macOS region capture.
@@ -152,6 +157,33 @@ final class Settings: ObservableObject {
         didSet { defaults.set(autoCheckForUpdates, forKey: Key.autoCheckForUpdates) }
     }
 
+    // MARK: - Translation
+
+    /// Active translation provider (Google Translate free or OpenAI API).
+    @Published var translationProvider: TranslationProvider = .google {
+        didSet { defaults.set(translationProvider.rawValue, forKey: Key.translationProvider) }
+    }
+
+    /// Target language code for translation (e.g. "vi", "en").
+    @Published var translationTargetLanguage: String = TranslationLanguage.defaultTarget {
+        didSet { defaults.set(translationTargetLanguage, forKey: Key.translationTargetLanguage) }
+    }
+
+    /// OpenAI API key for AI translation.
+    @Published var openaiApiKey: String = "" {
+        didSet { defaults.set(openaiApiKey, forKey: Key.openaiApiKey) }
+    }
+
+    /// OpenAI compatible API base URL.
+    @Published var openaiBaseURL: String = "https://api.openai.com/v1" {
+        didSet { defaults.set(openaiBaseURL, forKey: Key.openaiBaseURL) }
+    }
+
+    /// OpenAI model name (e.g. gpt-4o-mini).
+    @Published var openaiModel: String = "gpt-4o-mini" {
+        didSet { defaults.set(openaiModel, forKey: Key.openaiModel) }
+    }
+
     private let defaults = UserDefaults.standard
 
     init() {
@@ -193,6 +225,13 @@ final class Settings: ObservableObject {
         autoZoomOnClicks = defaults.object(forKey: Key.autoZoomOnClicks) as? Bool ?? true
         autoZoomLevel = defaults.object(forKey: Key.autoZoomLevel) as? Double ?? 2.0
         autoCheckForUpdates = defaults.object(forKey: Key.autoCheckForUpdates) as? Bool ?? true
+        if let raw = defaults.string(forKey: Key.translationProvider), let prov = TranslationProvider(rawValue: raw) {
+            translationProvider = prov
+        }
+        translationTargetLanguage = defaults.string(forKey: Key.translationTargetLanguage) ?? TranslationLanguage.defaultTarget
+        openaiApiKey = defaults.string(forKey: Key.openaiApiKey) ?? ""
+        openaiBaseURL = defaults.string(forKey: Key.openaiBaseURL) ?? "https://api.openai.com/v1"
+        openaiModel = defaults.string(forKey: Key.openaiModel) ?? "gpt-4o-mini"
     }
 
     // MARK: - Region coding

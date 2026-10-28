@@ -158,6 +158,7 @@ final class AppState: ObservableObject {
                 dimOpacity: self.settings.selectionOpacity,
                 showMagnifier: self.settings.showMagnifier,
                 copyOnDoubleClick: self.settings.copyOnDoubleClick,
+                settings: self.settings,
                 onComplete: { [weak self] image, rect, action in
                     guard let self else { return }
                     self.isCapturing = false

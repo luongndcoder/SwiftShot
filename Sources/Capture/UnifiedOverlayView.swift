@@ -58,6 +58,9 @@ final class UnifiedOverlayView: NSView {
     private var hudView: InPlaceHUDView?
     private var activeTextView: InPlaceTextView?
     private var magnifierView: MagnifierView?
+    private var translationPanel: TranslationPanelController?
+    private var translatedBlocks: [TranslatedBlock]?
+    var settings: Settings = Settings()
 
     // Callbacks
     private let onFinishCapture: (NSImage, CGRect, CaptureAction) -> Void
@@ -172,18 +175,146 @@ final class UnifiedOverlayView: NSView {
             redo()
         case .pin:
             guard let img = renderCurrentSelectionImage(), let sel = selectionRect else { return }
+            translationPanel?.closePanel()
+            translationPanel = nil
             onPinCapture(img, sel)
+        case .translate:
+            startTranslation()
         case .copy:
             guard let img = renderCurrentSelectionImage(), let sel = selectionRect else { return }
+            translationPanel?.closePanel()
+            translationPanel = nil
             onFinishCapture(img, sel, .copy)
         case .save:
             guard let img = renderCurrentSelectionImage(), let sel = selectionRect else { return }
+            translationPanel?.closePanel()
+            translationPanel = nil
             onFinishCapture(img, sel, .save)
         case .saveAs:
             guard let img = renderCurrentSelectionImage(), let sel = selectionRect else { return }
+            translationPanel?.closePanel()
+            translationPanel = nil
             onFinishCapture(img, sel, .saveAs)
         case .cancel:
+            translationPanel?.closePanel()
+            translationPanel = nil
             onCancel(selectionRect)
+        }
+    }
+
+    // MARK: - Translation Workflow
+
+    private func startTranslation() {
+        guard let sel = selectionRect, sel.width > 20, sel.height > 20 else { return }
+        guard let image = renderCurrentSelectionImage(),
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return
+        }
+
+        translationPanel?.closePanel()
+        translationPanel = nil
+
+        var origin = CGPoint(x: sel.maxX + 12, y: sel.midY - 180)
+        if let window = window, let screen = window.screen {
+            if origin.x + 430 > screen.frame.maxX {
+                origin.x = max(screen.frame.minX + 20, sel.minX - 432)
+            }
+            origin.y = max(screen.frame.minY + 20, min(origin.y, screen.frame.maxY - 380))
+        }
+
+        let panel = TranslationPanelController(
+            ocr: OCRResult(fullText: "", blocks: []),
+            initialResult: nil,
+            settings: settings,
+            at: origin
+        )
+        panel.setLoading(true)
+        panel.onToggleOverlay = { [weak self] result in
+            self?.translatedBlocks = result?.blocks
+            self?.needsDisplay = true
+        }
+        panel.onClosed = { [weak self] in
+            self?.translationPanel = nil
+        }
+        panel.show()
+        self.translationPanel = panel
+
+        Task {
+            do {
+                let ocrResult = try await OCRService.shared.recognizeText(in: cgImage)
+                guard !ocrResult.isEmpty else {
+                    await MainActor.run {
+                        panel.setError("No text recognized in the selection.")
+                    }
+                    return
+                }
+
+                let transResult = try await TranslationService.shared.translate(
+                    ocr: ocrResult,
+                    provider: settings.translationProvider,
+                    targetLanguage: settings.translationTargetLanguage,
+                    openaiApiKey: settings.openaiApiKey,
+                    openaiBaseURL: settings.openaiBaseURL,
+                    openaiModel: settings.openaiModel
+                )
+
+                await MainActor.run {
+                    panel.update(result: transResult)
+                    // Automatically show overlay on image
+                    self.translatedBlocks = transResult.blocks
+                    self.needsDisplay = true
+                }
+            } catch {
+                await MainActor.run {
+                    panel.setError(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func drawTranslatedBlocks(in context: CGContext, selectionRect sel: CGRect) {
+        guard let blocks = translatedBlocks, !blocks.isEmpty else { return }
+
+        for block in blocks {
+            let boxX = sel.origin.x + block.normalizedRect.origin.x * sel.width
+            let boxY = sel.origin.y + block.normalizedRect.origin.y * sel.height
+            let boxW = block.normalizedRect.width * sel.width
+            let boxH = block.normalizedRect.height * sel.height
+            let blockRect = CGRect(x: boxX, y: boxY, width: max(boxW, 20), height: max(boxH, 14))
+
+            context.saveGState()
+
+            // 1. Draw solid dark backdrop over original text with rounded corners
+            let bgPath = CGPath(roundedRect: blockRect.insetBy(dx: -2, dy: -1), cornerWidth: 3, cornerHeight: 3, transform: nil)
+            context.addPath(bgPath)
+            context.setFillColor(NSColor(white: 0.10, alpha: 0.94).cgColor)
+            context.fillPath()
+
+            context.addPath(bgPath)
+            context.setStrokeColor(NSColor.white.withAlphaComponent(0.25).cgColor)
+            context.setLineWidth(1)
+            context.strokePath()
+
+            // 2. Draw translated text inside the box
+            let fontSize = min(max(10, blockRect.height * 0.72), 26)
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.alignment = .left
+            paragraphStyle.lineBreakMode = .byTruncatingTail
+
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: fontSize, weight: .medium),
+                .foregroundColor: NSColor.white,
+                .paragraphStyle: paragraphStyle
+            ]
+
+            let textRect = blockRect.insetBy(dx: 2, dy: 1)
+            let attrString = NSAttributedString(string: block.translatedText, attributes: attrs)
+            let ctLine = CTLineCreateWithAttributedString(attrString)
+
+            context.textPosition = CGPoint(x: textRect.minX, y: textRect.minY + (textRect.height - fontSize) * 0.5)
+            CTLineDraw(ctLine, context)
+
+            context.restoreGState()
         }
     }
 
@@ -761,6 +892,7 @@ final class UnifiedOverlayView: NSView {
             // Draw committed annotations inside selection
             context.saveGState()
             context.clip(to: sel)
+            drawTranslatedBlocks(in: context, selectionRect: sel)
             for ann in annotations {
                 drawAnnotation(ann, in: context)
             }
@@ -1287,6 +1419,7 @@ final class UnifiedOverlayView: NSView {
         ctx.scaleBy(x: scaleX, y: scaleY)
         ctx.translateBy(x: -sel.origin.x, y: -sel.origin.y)
 
+        drawTranslatedBlocks(in: ctx, selectionRect: sel)
         for ann in annotations {
             drawAnnotation(ann, in: ctx)
         }
