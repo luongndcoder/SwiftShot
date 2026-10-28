@@ -41,7 +41,7 @@ final class TranslationPanelController: NSWindowController, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        panel.level = .floating
+        panel.level = NSWindow.Level(Int(CGWindowLevelForKey(.screenSaverWindow)) + 10)
         panel.isFloatingPanel = true
         panel.isMovableByWindowBackground = true
         panel.isOpaque = false
@@ -65,7 +65,9 @@ final class TranslationPanelController: NSWindowController, NSWindowDelegate {
     }
 
     func closePanel() {
+        window?.orderOut(nil)
         window?.close()
+        onClosed?()
     }
 
     func windowWillClose(_ notification: Notification) {

@@ -61,8 +61,20 @@ final class UnifiedOverlayView: NSView {
     private var translationPanel: TranslationPanelController?
     private var translatedBlocks: [TranslatedBlock]?
     private var textExtractPanel: TextExtractPanelController?
-    private var extractedOCRBlocks: [RecognizedTextBlock]?
     var settings: Settings = Settings()
+
+    // Live Text on-canvas selection
+    private var isLiveTextMode = false
+    private var liveTextBlocks: [RecognizedTextBlock] = []
+    private var selectedLiveBlockIds: Set<UUID> = []
+    private var hoveredLiveBlockId: UUID?
+    private var isDraggingLiveText = false
+    private var liveTextDragStartPoint: CGPoint = .zero
+    private var liveTextToolbar: NSView?
+    private var liveTextCopyButton: NSButton?
+    private var liveTextCountLabel: NSTextField?
+    private var liveTextSelectAllButton: NSButton?
+    private var toastView: NSView?
 
     private lazy var translationLoadingPill: NSView = {
         let pill = NSView()
@@ -192,6 +204,27 @@ final class UnifiedOverlayView: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+
+        // Live Text Mode: hover over recognized text lines on the image with I-beam cursor
+        if isLiveTextMode, let sel = selectionRect, sel.contains(point) {
+            magnifierView?.isHidden = true
+            if let hit = liveTextBlocks.first(where: { liveBlockRect($0, in: sel).contains(point) }) {
+                if hoveredLiveBlockId != hit.id {
+                    hoveredLiveBlockId = hit.id
+                    needsDisplay = true
+                }
+                NSCursor.iBeam.set()
+                return
+            } else {
+                if hoveredLiveBlockId != nil {
+                    hoveredLiveBlockId = nil
+                    needsDisplay = true
+                }
+                NSCursor.arrow.set()
+                return
+            }
+        }
+
         guard showsMagnifier else {
             magnifierView?.isHidden = true
             return
@@ -260,6 +293,7 @@ final class UnifiedOverlayView: NSView {
             textExtractPanel = nil
             onFinishCapture(img, sel, .saveAs)
         case .cancel:
+            exitLiveTextMode()
             translationLoadingPill.isHidden = true
             hudView?.setTranslating(false)
             translationPanel?.closePanel()
@@ -397,7 +431,15 @@ final class UnifiedOverlayView: NSView {
         }
     }
 
-    // MARK: - Text Extraction Workflow
+    // MARK: - Live Text & Text Extraction Workflow
+
+    private func liveBlockRect(_ block: RecognizedTextBlock, in sel: CGRect) -> CGRect {
+        let boxX = sel.origin.x + block.normalizedRect.origin.x * sel.width
+        let boxY = sel.origin.y + block.normalizedRect.origin.y * sel.height
+        let boxW = block.normalizedRect.width * sel.width
+        let boxH = block.normalizedRect.height * sel.height
+        return CGRect(x: boxX, y: boxY, width: max(boxW, 20), height: max(boxH, 14))
+    }
 
     private func startTextExtraction() {
         guard let sel = selectionRect, sel.width > 20, sel.height > 20 else { return }
@@ -406,34 +448,12 @@ final class UnifiedOverlayView: NSView {
             return
         }
 
-        textExtractPanel?.closePanel()
-        textExtractPanel = nil
+        exitLiveTextMode()
 
         // Show in-place loading indicator immediately
         translationLoadingPill.frame = CGRect(x: sel.midX - 110, y: sel.midY - 18, width: 220, height: 36)
         translationLoadingPill.isHidden = false
         hudView?.setTranslating(true)
-
-        var origin = CGPoint(x: sel.maxX + 12, y: sel.midY - 190)
-        if let window = window, let screen = window.screen {
-            if origin.x + 450 > screen.frame.maxX {
-                origin.x = max(screen.frame.minX + 20, sel.minX - 452)
-            }
-            origin.y = max(screen.frame.minY + 20, min(origin.y, screen.frame.maxY - 400))
-        }
-
-        let panel = TextExtractPanelController(ocr: nil, at: origin)
-        panel.setLoading(true)
-        panel.onToggleHighlight = { [weak self] _ in
-            self?.needsDisplay = true
-        }
-        panel.onClosed = { [weak self] in
-            self?.textExtractPanel = nil
-            self?.extractedOCRBlocks = nil
-            self?.needsDisplay = true
-        }
-        panel.show()
-        self.textExtractPanel = panel
 
         Task {
             do {
@@ -442,45 +462,284 @@ final class UnifiedOverlayView: NSView {
                     self.translationLoadingPill.isHidden = true
                     self.hudView?.setTranslating(false)
                     if ocrResult.isEmpty {
-                        panel.setError("Không tìm thấy văn bản nào trong vùng chọn.")
+                        self.showToast("Không tìm thấy văn bản nào trong vùng chọn")
                     } else {
-                        panel.update(ocr: ocrResult)
-                        self.extractedOCRBlocks = ocrResult.blocks
-                        self.needsDisplay = true
+                        self.enterLiveTextMode(blocks: ocrResult.blocks)
+                        self.showToast("Đã nhận diện \(ocrResult.blocks.count) dòng chữ. Nhấp hoặc kéo để chọn!")
                     }
                 }
             } catch {
                 await MainActor.run {
                     self.translationLoadingPill.isHidden = true
                     self.hudView?.setTranslating(false)
-                    panel.setError(error.localizedDescription)
+                    self.showToast(error.localizedDescription)
                 }
             }
         }
     }
 
-    private func drawExtractedTextHighlights(in context: CGContext, selectionRect sel: CGRect) {
-        guard let blocks = extractedOCRBlocks, !blocks.isEmpty else { return }
+    private func enterLiveTextMode(blocks: [RecognizedTextBlock]) {
+        isLiveTextMode = true
+        liveTextBlocks = blocks
+        selectedLiveBlockIds = Set(blocks.map(\.id)) // Pre-select all so user can copy immediately or select lines
+        showLiveTextToolbar()
+        needsDisplay = true
+    }
 
-        for block in blocks {
-            let boxX = sel.origin.x + block.normalizedRect.origin.x * sel.width
-            let boxY = sel.origin.y + block.normalizedRect.origin.y * sel.height
-            let boxW = block.normalizedRect.width * sel.width
-            let boxH = block.normalizedRect.height * sel.height
-            let blockRect = CGRect(x: boxX, y: boxY, width: max(boxW, 20), height: max(boxH, 14))
+    private func exitLiveTextMode() {
+        isLiveTextMode = false
+        liveTextBlocks = []
+        selectedLiveBlockIds = []
+        hoveredLiveBlockId = nil
+        isDraggingLiveText = false
+        liveTextToolbar?.removeFromSuperview()
+        liveTextToolbar = nil
+        textExtractPanel?.closePanel()
+        textExtractPanel = nil
+        needsDisplay = true
+    }
+
+    private func showLiveTextToolbar() {
+        guard let sel = selectionRect else { return }
+        liveTextToolbar?.removeFromSuperview()
+
+        let bar = NSView()
+        bar.wantsLayer = true
+        bar.layer?.cornerRadius = 16
+        bar.layer?.masksToBounds = false
+        bar.layer?.shadowColor = NSColor.black.cgColor
+        bar.layer?.shadowOpacity = 0.5
+        bar.layer?.shadowOffset = CGSize(width: 0, height: -2)
+        bar.layer?.shadowRadius = 8
+
+        let glass = NSVisualEffectView()
+        glass.material = .hudWindow
+        glass.blendingMode = .withinWindow
+        glass.state = .active
+        glass.appearance = NSAppearance(named: .darkAqua)
+        glass.wantsLayer = true
+        glass.layer?.cornerRadius = 16
+        glass.layer?.masksToBounds = true
+        glass.layer?.borderWidth = 1
+        glass.layer?.borderColor = NSColor.white.withAlphaComponent(0.2).cgColor
+        bar.addSubview(glass)
+        glass.autoresizingMask = [.width, .height]
+
+        let stack = NSStackView()
+        stack.orientation = .horizontal
+        stack.spacing = 8
+        stack.alignment = .centerY
+        stack.edgeInsets = NSEdgeInsets(top: 4, left: 12, bottom: 4, right: 12)
+
+        let icon = NSImageView()
+        icon.image = NSImage(systemSymbolName: "text.viewfinder", accessibilityDescription: nil)
+        icon.contentTintColor = .systemCyan
+        stack.addArrangedSubview(icon)
+
+        let countLabel = NSTextField(labelWithString: "\(selectedLiveBlockIds.count)/\(liveTextBlocks.count) dòng")
+        countLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        countLabel.textColor = .labelColor
+        self.liveTextCountLabel = countLabel
+        stack.addArrangedSubview(countLabel)
+
+        let selectAllBtn = NSButton(title: "Bỏ chọn", target: self, action: #selector(toggleSelectAllLiveText))
+        selectAllBtn.bezelStyle = .inline
+        selectAllBtn.font = NSFont.systemFont(ofSize: 11)
+        self.liveTextSelectAllButton = selectAllBtn
+        stack.addArrangedSubview(selectAllBtn)
+
+        let copyBtn = NSButton(title: "Copy (⌘C)", target: self, action: #selector(copySelectedLiveText))
+        copyBtn.bezelStyle = .inline
+        copyBtn.font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+        copyBtn.contentTintColor = .systemCyan
+        self.liveTextCopyButton = copyBtn
+        stack.addArrangedSubview(copyBtn)
+
+        let detailBtn = NSButton(title: "Bảng chi tiết", target: self, action: #selector(openDetailsPanel))
+        detailBtn.bezelStyle = .inline
+        detailBtn.font = NSFont.systemFont(ofSize: 11)
+        stack.addArrangedSubview(detailBtn)
+
+        let closeBtn = NSButton(title: "✕", target: self, action: #selector(closeLiveTextModeAction))
+        closeBtn.bezelStyle = .inline
+        closeBtn.font = NSFont.systemFont(ofSize: 11, weight: .bold)
+        closeBtn.contentTintColor = .secondaryLabelColor
+        stack.addArrangedSubview(closeBtn)
+
+        bar.addSubview(stack)
+        stack.autoresizingMask = [.width, .height]
+
+        let barWidth: CGFloat = 370
+        let barHeight: CGFloat = 32
+        var barX = sel.midX - barWidth / 2
+        var barY = sel.maxY + 10
+        if barY + barHeight > bounds.height - 10 {
+            barY = max(10, sel.minY - barHeight - 10)
+        }
+        barX = max(10, min(barX, bounds.width - barWidth - 10))
+
+        bar.frame = CGRect(x: barX, y: barY, width: barWidth, height: barHeight)
+        addSubview(bar)
+        self.liveTextToolbar = bar
+    }
+
+    private func updateLiveTextToolbarState() {
+        liveTextCountLabel?.stringValue = "\(selectedLiveBlockIds.count)/\(liveTextBlocks.count) dòng"
+        if selectedLiveBlockIds.count == liveTextBlocks.count {
+            liveTextSelectAllButton?.title = "Bỏ chọn"
+        } else {
+            liveTextSelectAllButton?.title = "Chọn tất cả"
+        }
+        liveTextCopyButton?.title = selectedLiveBlockIds.isEmpty ? "Copy (⌘C)" : "Copy (\(selectedLiveBlockIds.count))"
+    }
+
+    @objc private func copySelectedLiveText() {
+        let blocksToCopy = selectedLiveBlockIds.isEmpty
+            ? liveTextBlocks
+            : liveTextBlocks.filter { selectedLiveBlockIds.contains($0.id) }
+        let text = blocksToCopy.map(\.text).joined(separator: "\n")
+        if !text.isEmpty {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            showToast("Đã copy \(blocksToCopy.count) dòng chữ vào Clipboard! ✓")
+        }
+    }
+
+    @objc private func toggleSelectAllLiveText() {
+        if selectedLiveBlockIds.count == liveTextBlocks.count {
+            selectedLiveBlockIds.removeAll()
+        } else {
+            selectedLiveBlockIds = Set(liveTextBlocks.map(\.id))
+        }
+        updateLiveTextToolbarState()
+        needsDisplay = true
+    }
+
+    @objc private func openDetailsPanel() {
+        guard let sel = selectionRect else { return }
+        var origin = CGPoint(x: sel.maxX + 12, y: sel.midY - 190)
+        if let window = window, let screen = window.screen {
+            if origin.x + 450 > screen.frame.maxX {
+                origin.x = max(screen.frame.minX + 20, sel.minX - 452)
+            }
+            origin.y = max(screen.frame.minY + 20, min(origin.y, screen.frame.maxY - 400))
+        }
+
+        let ocr = OCRResult(
+            fullText: liveTextBlocks.map(\.text).joined(separator: "\n"),
+            blocks: liveTextBlocks
+        )
+        let panel = TextExtractPanelController(ocr: ocr, at: origin)
+        panel.onClosed = { [weak self] in
+            self?.textExtractPanel = nil
+        }
+        panel.show()
+        self.textExtractPanel = panel
+    }
+
+    @objc private func closeLiveTextModeAction() {
+        exitLiveTextMode()
+    }
+
+    private func showToast(_ message: String) {
+        guard let sel = selectionRect else { return }
+        toastView?.removeFromSuperview()
+
+        let pill = NSView()
+        pill.wantsLayer = true
+        pill.layer?.cornerRadius = 14
+        pill.layer?.masksToBounds = false
+        pill.layer?.shadowColor = NSColor.black.cgColor
+        pill.layer?.shadowOpacity = 0.5
+        pill.layer?.shadowOffset = CGSize(width: 0, height: -2)
+        pill.layer?.shadowRadius = 8
+
+        let glass = NSVisualEffectView()
+        glass.material = .hudWindow
+        glass.blendingMode = .withinWindow
+        glass.state = .active
+        glass.appearance = NSAppearance(named: .darkAqua)
+        glass.wantsLayer = true
+        glass.layer?.cornerRadius = 14
+        glass.layer?.masksToBounds = true
+        glass.layer?.borderWidth = 1
+        glass.layer?.borderColor = NSColor.systemGreen.withAlphaComponent(0.4).cgColor
+        pill.addSubview(glass)
+        glass.autoresizingMask = [.width, .height]
+
+        let label = NSTextField(labelWithString: message)
+        label.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+        label.textColor = .white
+        label.alignment = .center
+        pill.addSubview(label)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 14),
+            label.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -14),
+            label.topAnchor.constraint(equalTo: pill.topAnchor, constant: 5),
+            label.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: -5)
+        ])
+
+        let toastWidth = min(bounds.width - 40, max(200, label.intrinsicContentSize.width + 28))
+        pill.frame = CGRect(x: sel.midX - toastWidth / 2, y: max(20, sel.minY + 10), width: toastWidth, height: 28)
+
+        addSubview(pill)
+        self.toastView = pill
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self, weak pill] in
+            guard let pill, self?.toastView == pill else { return }
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.3
+                pill.animator().alphaValue = 0.0
+            }, completionHandler: {
+                pill.removeFromSuperview()
+                if self?.toastView == pill {
+                    self?.toastView = nil
+                }
+            })
+        }
+    }
+
+    private func drawLiveTextHighlights(in context: CGContext, selectionRect sel: CGRect) {
+        guard isLiveTextMode, !liveTextBlocks.isEmpty else { return }
+
+        for block in liveTextBlocks {
+            let blockRect = liveBlockRect(block, in: sel)
+            let isSelected = selectedLiveBlockIds.contains(block.id)
+            let isHovered = (hoveredLiveBlockId == block.id)
 
             context.saveGState()
 
             let path = CGPath(roundedRect: blockRect.insetBy(dx: -2, dy: -1), cornerWidth: 3, cornerHeight: 3, transform: nil)
             context.addPath(path)
-            context.setFillColor(NSColor.cyan.withAlphaComponent(0.12).cgColor)
-            context.fillPath()
 
-            context.addPath(path)
-            context.setStrokeColor(NSColor.cyan.withAlphaComponent(0.65).cgColor)
-            context.setLineWidth(1)
-            context.setLineDash(phase: 0, lengths: [4, 3])
-            context.strokePath()
+            if isSelected {
+                // Apple Live Text blue selection highlight
+                context.setFillColor(NSColor.systemBlue.withAlphaComponent(0.40).cgColor)
+                context.fillPath()
+
+                context.addPath(path)
+                context.setStrokeColor(NSColor.systemCyan.withAlphaComponent(0.85).cgColor)
+                context.setLineWidth(1.5)
+                context.strokePath()
+            } else if isHovered {
+                // Subtle hover highlight
+                context.setFillColor(NSColor.white.withAlphaComponent(0.15).cgColor)
+                context.fillPath()
+
+                context.addPath(path)
+                context.setStrokeColor(NSColor.white.withAlphaComponent(0.6).cgColor)
+                context.setLineWidth(1)
+                context.setLineDash(phase: 0, lengths: [4, 3])
+                context.strokePath()
+            } else {
+                // Selectable text indicator: subtle dashed frame
+                context.addPath(path)
+                context.setStrokeColor(NSColor.white.withAlphaComponent(0.25).cgColor)
+                context.setLineWidth(1)
+                context.setLineDash(phase: 0, lengths: [3, 3])
+                context.strokePath()
+            }
 
             context.restoreGState()
         }
@@ -490,6 +749,42 @@ final class UnifiedOverlayView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+
+        // Live Text Mode: click or drag select text lines directly on the screenshot
+        if isLiveTextMode, let sel = selectionRect, sel.contains(point) {
+            // Double click on a text line: copy that line immediately!
+            if event.clickCount == 2, let hit = liveTextBlocks.first(where: { liveBlockRect($0, in: sel).contains(point) }) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(hit.text, forType: .string)
+                showToast("Đã copy: \"\(hit.text.prefix(32))...\" ✓")
+                selectedLiveBlockIds = [hit.id]
+                updateLiveTextToolbarState()
+                needsDisplay = true
+                return
+            }
+
+            // Click or drag selection across lines
+            if let hit = liveTextBlocks.first(where: { liveBlockRect($0, in: sel).contains(point) }) {
+                if event.modifierFlags.contains(.shift) || event.modifierFlags.contains(.command) {
+                    if selectedLiveBlockIds.contains(hit.id) {
+                        selectedLiveBlockIds.remove(hit.id)
+                    } else {
+                        selectedLiveBlockIds.insert(hit.id)
+                    }
+                } else {
+                    selectedLiveBlockIds = [hit.id]
+                }
+            } else {
+                if !event.modifierFlags.contains(.shift) && !event.modifierFlags.contains(.command) {
+                    selectedLiveBlockIds.removeAll()
+                }
+            }
+            isDraggingLiveText = true
+            liveTextDragStartPoint = point
+            updateLiveTextToolbarState()
+            needsDisplay = true
+            return
+        }
 
         // 0. Eyedropper mode: pick the colour under the cursor and leave the mode.
         if isEyedropperActive {
@@ -574,6 +869,23 @@ final class UnifiedOverlayView: NSView {
     override func mouseDragged(with event: NSEvent) {
         let current = convert(event.locationInWindow, from: nil)
 
+        if isLiveTextMode, isDraggingLiveText, let sel = selectionRect {
+            let dragRect = CGRect(
+                x: min(liveTextDragStartPoint.x, current.x),
+                y: min(liveTextDragStartPoint.y, current.y),
+                width: abs(current.x - liveTextDragStartPoint.x),
+                height: abs(current.y - liveTextDragStartPoint.y)
+            )
+            for block in liveTextBlocks {
+                if dragRect.intersects(liveBlockRect(block, in: sel)) {
+                    selectedLiveBlockIds.insert(block.id)
+                }
+            }
+            updateLiveTextToolbarState()
+            needsDisplay = true
+            return
+        }
+
         if isSelecting {
             selectionRect = CGRect(
                 x: min(dragStartPoint.x, current.x),
@@ -651,6 +963,13 @@ final class UnifiedOverlayView: NSView {
 
     override func mouseUp(with event: NSEvent) {
         let current = convert(event.locationInWindow, from: nil)
+
+        if isLiveTextMode, isDraggingLiveText {
+            isDraggingLiveText = false
+            updateLiveTextToolbarState()
+            needsDisplay = true
+            return
+        }
 
         if isSelecting {
             isSelecting = false
@@ -1061,7 +1380,7 @@ final class UnifiedOverlayView: NSView {
             context.saveGState()
             context.clip(to: sel)
             drawTranslatedBlocks(in: context, selectionRect: sel)
-            drawExtractedTextHighlights(in: context, selectionRect: sel)
+            drawLiveTextHighlights(in: context, selectionRect: sel)
             for ann in annotations {
                 drawAnnotation(ann, in: context)
             }
@@ -1603,6 +1922,26 @@ final class UnifiedOverlayView: NSView {
 
     override func keyDown(with event: NSEvent) {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        // Shortcuts in Live Text selection mode
+        if isLiveTextMode {
+            if event.keyCode == UInt16(kVK_Escape) {
+                exitLiveTextMode()
+                return
+            }
+            if flags.contains(.command) {
+                if event.charactersIgnoringModifiers?.lowercased() == "c" {
+                    copySelectedLiveText()
+                    return
+                }
+                if event.charactersIgnoringModifiers?.lowercased() == "a" {
+                    selectedLiveBlockIds = Set(liveTextBlocks.map(\.id))
+                    updateLiveTextToolbarState()
+                    needsDisplay = true
+                    return
+                }
+            }
+        }
 
         // 1. Esc: Cancel capture
         if event.keyCode == UInt16(kVK_Escape) {
