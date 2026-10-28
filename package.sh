@@ -11,7 +11,7 @@ set -e
 
 cd "$(dirname "$0")"
 
-VERSION="${1:-1.2.0}"
+VERSION="${1:-1.3.0}"
 APP="SwiftShot"
 BUILD_APP=".build-release/Build/Products/Release/${APP}.app"
 DIST_DIR="dist"

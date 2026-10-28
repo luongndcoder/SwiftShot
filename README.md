@@ -4,7 +4,7 @@
   <p><strong>A lightning-fast, ultra-lightweight, 100% native macOS screenshot, screen recording & annotation suite — featuring Cursorful-style auto-zoom and an MCP server for AI coding agents.</strong></p>
 
   <p>
-    <a href="https://github.com/luongndcoder/SwiftShot/releases"><img src="https://img.shields.io/badge/Release-1.2.0-blue.svg?style=flat-square" alt="Release 1.2.0" /></a>
+    <a href="https://github.com/luongndcoder/SwiftShot/releases"><img src="https://img.shields.io/badge/Release-1.3.0-blue.svg?style=flat-square" alt="Release 1.3.0" /></a>
     <a href="https://developer.apple.com/macos/"><img src="https://img.shields.io/badge/macOS-14.0%2B-black.svg?style=flat-square&logo=apple" alt="macOS 14+" /></a>
     <a href="https://swift.org"><img src="https://img.shields.io/badge/Swift-5.9%20%7C%206.0-orange.svg?style=flat-square&logo=swift" alt="Swift" /></a>
     <a href="#-ram-comparison"><img src="https://img.shields.io/badge/RAM-~70MB-brightgreen.svg?style=flat-square" alt="RAM" /></a>
@@ -167,7 +167,7 @@ open -a SwiftShot
 ### 📦 Installation
 
 #### Option 1: Direct Download (Prebuilt)
-Download the latest `SwiftShot-v1.2.0-macOS.zip` from [GitHub Releases](https://github.com/luongndcoder/SwiftShot/releases), unzip, and drag `SwiftShot.app` into `/Applications`.
+Download the latest `SwiftShot-v1.3.0-macOS.zip` from [GitHub Releases](https://github.com/luongndcoder/SwiftShot/releases), unzip, and drag `SwiftShot.app` into `/Applications`.
 
 #### Option 2: Build & Install from Source
 ```bash
@@ -293,7 +293,7 @@ open -a SwiftShot
 ### 📦 Hướng dẫn cài đặt
 
 #### Cách 1: Tải bản đóng gói sẵn (Khuyên dùng)
-Tải file `SwiftShot-v1.2.0-macOS.zip` tại [GitHub Releases](https://github.com/luongndcoder/SwiftShot/releases), giải nén và kéo `SwiftShot.app` vào thư mục `/Applications`.
+Tải file `SwiftShot-v1.3.0-macOS.zip` tại [GitHub Releases](https://github.com/luongndcoder/SwiftShot/releases), giải nén và kéo `SwiftShot.app` vào thư mục `/Applications`.
 
 #### Cách 2: Cài đặt từ mã nguồn
 ```bash
@@ -309,7 +309,7 @@ cd SwiftShot
 ```bash
 ./generate.sh                      # Tạo lại project Xcode từ project.yml (yêu cầu xcodegen)
 ./install.sh                       # Build, ký ad-hoc và cài đặt vào /Applications
-./package.sh 1.2.0                 # Đóng gói bản phát hành signed zip vào dist/
+./package.sh 1.3.0                 # Đóng gói bản phát hành signed zip vào dist/
 ./install-mcp.sh                   # Build và cài đặt MCP server vào ~/.local/bin
 python3 Tests/e2e_mcp.py           # Chạy test E2E cho MCP server
 cd MCP && swift build -c release   # Build riêng module MCP server

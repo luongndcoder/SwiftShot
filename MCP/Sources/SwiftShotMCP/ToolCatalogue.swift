@@ -2,7 +2,7 @@ import Foundation
 
 /// The MCP tool catalogue exposed to the agent.
 enum ToolCatalogue {
-    static let version = "1.2.0"
+    static let version = "1.3.0"
 
     /// JSON schema of a tool.
     struct Tool {
