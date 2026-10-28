@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0D9F77750E4060926E02A91F /* ScreenRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1962BA33EECDB6E2A4BB9BE6 /* ScreenRecorder.swift */; };
 		2696B8BC0981349138A05ECD /* SwiftShotBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06DA7093F133A16A19B1C461 /* SwiftShotBridge.swift */; };
 		2AE2B6009A3595CD4694E750 /* FileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49089FA02B979C70A0E3A1FD /* FileStore.swift */; };
 		2C0C84E2B63625F33D5A6672 /* MenuIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = 40E9F218AF34EDED8FCA53FE /* MenuIcon.png */; };
@@ -17,14 +18,12 @@
 		7C14BE131A5AD67F0B0B5BC3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5740C6254FD9CD4F604E8FF6 /* Assets.xcassets */; };
 		7FC62640BD932CCAE7CAB0C7 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 154625D6BA531DEFB127C1C6 /* AppIcon.icns */; };
 		812DE03FEC2C3F9431694A96 /* ScreenshotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68F46D58A4CFF5D3AC9F2E3B /* ScreenshotService.swift */; };
-		C650326048044B658ED86E3F /* ScreenRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57E1DE9946F04A6B92DAD0D7 /* ScreenRecorder.swift */; };
-		D15EA5E00000000000000B01 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15EA5E00000000000000F01 /* UpdateChecker.swift */; };
-		D15EA5E00000000000000B02 /* ZoomExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = D15EA5E00000000000000F02 /* ZoomExporter.swift */; };
 		828C9D7249AE8BB7CFDE805A /* PixelSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = F19E7B5D18752BA41F200D31 /* PixelSampler.swift */; };
 		8E7542E223EA73E200541D6D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A3066F3DA8C66DF731946B9 /* AppDelegate.swift */; };
 		9226A32C15349502EA4DB73C /* MagnifierView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E10D65E039062D55B58A0FA /* MagnifierView.swift */; };
 		9E79A033D61FEB308062A1A4 /* InPlaceTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69AAFE1D9791F81BD8D911EB /* InPlaceTextView.swift */; };
 		A6C20D4CCC7EF182C1A4AB30 /* Annotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68A4D20DB816AB876487D11B /* Annotation.swift */; };
+		A8C3F8863D5F9A4F2042BE0D /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 616F18D009D0C6AE4B65443C /* UpdateChecker.swift */; };
 		AF42F44F170A903728C2D193 /* Clipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED58DD191B70ABC80C3CB5E7 /* Clipboard.swift */; };
 		B767903B71036BB046FBBB91 /* UnifiedOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40AC59810C3275E453B24D60 /* UnifiedOverlayView.swift */; };
 		D4914B21419604CF9748B699 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 828BC161D3DF7C997AF3AE59 /* Settings.swift */; };
@@ -32,12 +31,14 @@
 		D8DA6D8A2A41A2B34A383F27 /* SwiftShotApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ABCAF4573E832189246CA4F /* SwiftShotApp.swift */; };
 		DD8FE0D608F09D5FA062C10E /* ScreenshotOverlayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63425946CD808A881FBDAE42 /* ScreenshotOverlayController.swift */; };
 		E89579E60A998E4B07EF2A57 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE3469C3C1B706F20C058E97 /* SettingsView.swift */; };
+		FFAAC40E020ED6BAC235424F /* ZoomExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B6E71838DDB9172A88F7456 /* ZoomExporter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		06DA7093F133A16A19B1C461 /* SwiftShotBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftShotBridge.swift; sourceTree = "<group>"; };
 		0E10D65E039062D55B58A0FA /* MagnifierView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MagnifierView.swift; sourceTree = "<group>"; };
 		154625D6BA531DEFB127C1C6 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		1962BA33EECDB6E2A4BB9BE6 /* ScreenRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRecorder.swift; sourceTree = "<group>"; };
 		1ABCAF4573E832189246CA4F /* SwiftShotApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftShotApp.swift; sourceTree = "<group>"; };
 		40AC59810C3275E453B24D60 /* UnifiedOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedOverlayView.swift; sourceTree = "<group>"; };
 		40E9F218AF34EDED8FCA53FE /* MenuIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = MenuIcon.png; sourceTree = "<group>"; };
@@ -45,13 +46,12 @@
 		4CF97574A04BFFE9A8CBB9A7 /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
 		563F64077B19D92C2C8CD27D /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		5740C6254FD9CD4F604E8FF6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		616F18D009D0C6AE4B65443C /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 		63425946CD808A881FBDAE42 /* ScreenshotOverlayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotOverlayController.swift; sourceTree = "<group>"; };
 		68A4D20DB816AB876487D11B /* Annotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Annotation.swift; sourceTree = "<group>"; };
 		68F46D58A4CFF5D3AC9F2E3B /* ScreenshotService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotService.swift; sourceTree = "<group>"; };
-		57E1DE9946F04A6B92DAD0D7 /* ScreenRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRecorder.swift; sourceTree = "<group>"; };
-		D15EA5E00000000000000F01 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
-		D15EA5E00000000000000F02 /* ZoomExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomExporter.swift; sourceTree = "<group>"; };
 		69AAFE1D9791F81BD8D911EB /* InPlaceTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InPlaceTextView.swift; sourceTree = "<group>"; };
+		7B6E71838DDB9172A88F7456 /* ZoomExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomExporter.swift; sourceTree = "<group>"; };
 		828BC161D3DF7C997AF3AE59 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		8A3066F3DA8C66DF731946B9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		92760E392AFC8D0E11FE1F87 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -131,13 +131,13 @@
 				4CF97574A04BFFE9A8CBB9A7 /* HotkeyManager.swift */,
 				92760E392AFC8D0E11FE1F87 /* Info.plist */,
 				563F64077B19D92C2C8CD27D /* MenuBarController.swift */,
+				1962BA33EECDB6E2A4BB9BE6 /* ScreenRecorder.swift */,
 				68F46D58A4CFF5D3AC9F2E3B /* ScreenshotService.swift */,
-				57E1DE9946F04A6B92DAD0D7 /* ScreenRecorder.swift */,
-				D15EA5E00000000000000F01 /* UpdateChecker.swift */,
-				D15EA5E00000000000000F02 /* ZoomExporter.swift */,
 				828BC161D3DF7C997AF3AE59 /* Settings.swift */,
 				A8716A0B98E6D9CA158C6482 /* SwiftShot.entitlements */,
 				1ABCAF4573E832189246CA4F /* SwiftShotApp.swift */,
+				616F18D009D0C6AE4B65443C /* UpdateChecker.swift */,
+				7B6E71838DDB9172A88F7456 /* ZoomExporter.swift */,
 				CBA66763A9D7D2CBAE855682 /* Capture */,
 				4D4C217A2B1AEC8A394BE0E1 /* Editor */,
 				F24394619BD6BACEC290B2AD /* MCP */,
@@ -248,16 +248,16 @@
 				D57E443D959543A57DB743A7 /* MenuBarController.swift in Sources */,
 				747F60298FD76FA9BF95444F /* PinWindowController.swift in Sources */,
 				828C9D7249AE8BB7CFDE805A /* PixelSampler.swift in Sources */,
+				0D9F77750E4060926E02A91F /* ScreenRecorder.swift in Sources */,
 				DD8FE0D608F09D5FA062C10E /* ScreenshotOverlayController.swift in Sources */,
 				812DE03FEC2C3F9431694A96 /* ScreenshotService.swift in Sources */,
-				C650326048044B658ED86E3F /* ScreenRecorder.swift in Sources */,
-				D15EA5E00000000000000B01 /* UpdateChecker.swift in Sources */,
-				D15EA5E00000000000000B02 /* ZoomExporter.swift in Sources */,
 				D4914B21419604CF9748B699 /* Settings.swift in Sources */,
 				E89579E60A998E4B07EF2A57 /* SettingsView.swift in Sources */,
 				D8DA6D8A2A41A2B34A383F27 /* SwiftShotApp.swift in Sources */,
 				2696B8BC0981349138A05ECD /* SwiftShotBridge.swift in Sources */,
 				B767903B71036BB046FBBB91 /* UnifiedOverlayView.swift in Sources */,
+				A8C3F8863D5F9A4F2042BE0D /* UpdateChecker.swift in Sources */,
+				FFAAC40E020ED6BAC235424F /* ZoomExporter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -145,7 +145,7 @@ struct SettingsView: View {
                 HStack {
                     Text("SwiftShot")
                     Spacer()
-                    Text("v1.1.0")
+                    Text("v\(UpdateChecker.shared.currentVersion)")
                         .foregroundColor(.secondary)
                 }
                 Text("Lightweight native macOS screenshot tool. Inspired by Flameshot.")
