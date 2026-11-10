@@ -2,15 +2,21 @@ import AppKit
 import CoreGraphics
 import CoreImage
 
-/// Floating magnifying glass loupe showing 4x zoomed pixels and RGB/HEX color inspection.
+/// Floating magnifying glass loupe showing ~4x zoomed pixels and RGB/HEX color inspection.
 final class MagnifierView: NSView {
+    /// Loupe size in points — used by both the layout below and by the
+    /// positioning logic in `update(at:in:backgroundImage:)`.
+    private static let loupeSize = CGSize(width: 120, height: 132)
+    /// Size of the sampled patch (in image pixels) shown inside the zoom area.
+    private static let sampleSize: CGFloat = 24
+
     private var pixelImage: CGImage?
     private var colorText: String = ""
     private var hexText: String = ""
     private var currentColor: NSColor = .black
 
     override init(frame: NSRect) {
-        super.init(frame: NSRect(x: 0, y: 0, width: 140, height: 160))
+        super.init(frame: NSRect(origin: .zero, size: Self.loupeSize))
         wantsLayer = true
         layer?.cornerRadius = 10
         // NOTE: `masksToBounds` is intentionally NOT set — it would clip the drop shadow.
@@ -29,7 +35,7 @@ final class MagnifierView: NSView {
     }
 
     func update(at point: CGPoint, in bounds: CGRect, backgroundImage: CGImage) {
-        let sampleSize: CGFloat = 24
+        let sampleSize = Self.sampleSize
         let bgW = CGFloat(backgroundImage.width)
         let bgH = CGFloat(backgroundImage.height)
 
@@ -48,10 +54,10 @@ final class MagnifierView: NSView {
         sampleCenterColor(of: self.pixelImage)
 
         var mx = point.x + 20
-        var my = point.y - 180
-        if mx + 140 > bounds.width { mx = point.x - 160 }
+        var my = point.y - (Self.loupeSize.height + 20)
+        if mx + Self.loupeSize.width > bounds.width { mx = point.x - Self.loupeSize.width - 20 }
         if my < 10 { my = point.y + 20 }
-        self.frame = NSRect(x: mx, y: my, width: 140, height: 160)
+        self.frame = NSRect(origin: CGPoint(x: mx, y: my), size: Self.loupeSize)
 
         needsDisplay = true
     }
@@ -76,7 +82,7 @@ final class MagnifierView: NSView {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
 
         // 1. Top zoomed pixel grid
-        let zoomRect = CGRect(x: 10, y: bounds.height - 110, width: 120, height: 100)
+        let zoomRect = CGRect(x: 7, y: bounds.height - 82, width: bounds.width - 14, height: 72)
         ctx.saveGState()
         let clipPath = CGPath(roundedRect: zoomRect, cornerWidth: 6, cornerHeight: 6, transform: nil)
         ctx.addPath(clipPath)
@@ -105,7 +111,7 @@ final class MagnifierView: NSView {
         ctx.strokePath()
 
         // 2. Color preview box
-        let colorBox = CGRect(x: 10, y: 12, width: 24, height: 24)
+        let colorBox = CGRect(x: 7, y: 10, width: 20, height: 20)
         ctx.setFillColor(currentColor.cgColor)
         ctx.fill(colorBox)
         ctx.setStrokeColor(NSColor.white.cgColor)
@@ -113,10 +119,10 @@ final class MagnifierView: NSView {
 
         // 3. Draw text info via CoreText (100% thread-safe & zero AppKit nil-dict exceptions)
         if !hexText.isEmpty {
-            drawCoreText(hexText, at: CGPoint(x: 42, y: 26), in: ctx, fontSize: 10, isBold: true, color: .white)
+            drawCoreText(hexText, at: CGPoint(x: 31, y: 27), in: ctx, fontSize: 9, isBold: true, color: .white)
         }
         if !colorText.isEmpty {
-            drawCoreText(colorText, at: CGPoint(x: 42, y: 12), in: ctx, fontSize: 9, isBold: false, color: NSColor(calibratedWhite: 0.8, alpha: 1.0))
+            drawCoreText(colorText, at: CGPoint(x: 31, y: 13), in: ctx, fontSize: 7.5, isBold: false, color: NSColor(calibratedWhite: 0.8, alpha: 1.0))
         }
     }
 

@@ -38,12 +38,16 @@ final class InPlaceHUDView: NSView {
     private var presetStack: NSStackView?
     private let statusLabel = NSTextField(labelWithString: "")
     private let strokeWidthLabel = NSTextField(labelWithString: "")
+    /// The shared colour panel keeps a strong reference to its target, so it
+    /// must never point straight at this view — see `ColorPanelProxy`.
+    private let colorPanelProxy = ColorPanelProxy()
 
     init(initialColor: NSColor = .systemRed, initialStrokeWidth: CGFloat = 3, presets: [NSColor] = [], onAction: @escaping (Action) -> Void) {
         self.currentColor = initialColor
         self.currentStrokeWidth = initialStrokeWidth
         self.onAction = onAction
         super.init(frame: .zero)
+        colorPanelProxy.hud = self
         setupUI()
         setPresets(presets)
     }
@@ -440,17 +444,27 @@ final class InPlaceHUDView: NSView {
         panel.level = .screenSaver + 1
         panel.showsAlpha = true
         panel.isFloatingPanel = true
-        panel.setTarget(self)
-        panel.setAction(#selector(colorPanelChanged(_:)))
+        // `NSColorPanel` is a singleton that retains its target, so it gets the
+        // weak proxy instead of this view — otherwise the whole capture overlay
+        // (window, snapshot and Retina backing store) would never be freed.
+        panel.setTarget(colorPanelProxy)
+        panel.setAction(#selector(ColorPanelProxy.colorChanged(_:)))
         panel.color = currentColor
         panel.makeKeyAndOrderFront(nil)
     }
 
-    @objc private func colorPanelChanged(_ sender: NSColorPanel) {
-        let color = sender.color
+    /// Called by `ColorPanelProxy` while the HUD is alive.
+    fileprivate func applyColorFromPanel(_ color: NSColor) {
         currentColor = color
         refreshColorSelection()
         onAction(.changeColor(color))
+    }
+
+    /// Drops the last link between the shared colour panel and this HUD.
+    /// `ScreenshotOverlayController` calls this when the overlay closes so the
+    /// panel cannot keep the capture (and its ~30–60 MB of backing) alive.
+    func detachColorPanel() {
+        colorPanelProxy.hud = nil
     }
 
     // MARK: - Button factories
@@ -469,9 +483,7 @@ final class InPlaceHUDView: NSView {
         tint: NSColor,
         action: @escaping () -> Void
     ) -> TileButton {
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: name) ?? NSImage()
-        let configuration = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
-        let sized = image.withSymbolConfiguration(configuration) ?? image
+        let sized = Self.cachedSymbol(symbol, accessibility: name)
         let btn = TileButton(image: sized, name: name, action: action, size: 28)
         btn.contentTintColor = tint
         btn.onHover = { [weak self] hovered in
@@ -487,8 +499,24 @@ final class InPlaceHUDView: NSView {
         return btn
     }
 
+    /// SF Symbol images are immutable and reused on every capture; parsing and
+    /// rasterizing them again for each new HUD only creates garbage (and keeps
+    /// CoreSVG caches growing).
+    private static func cachedSymbol(_ name: String, accessibility: String) -> NSImage {
+        if let cached = symbolCache[name] { return cached }
+        let base = NSImage(systemSymbolName: name, accessibilityDescription: accessibility) ?? NSImage()
+        let configuration = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        let sized = base.withSymbolConfiguration(configuration) ?? base
+        symbolCache[name] = sized
+        return sized
+    }
+
+    private static var symbolCache: [String: NSImage] = [:]
+    /// Colour swatches draw their own circle, so they share one empty image.
+    private static let emptySwatchImage = NSImage()
+
     private func createColorButton(color: NSColor, name: String) -> NSButton {
-        let btn = TileButton(image: NSImage(), name: name, action: { [weak self] in
+        let btn = TileButton(image: Self.emptySwatchImage, name: name, action: { [weak self] in
             self?.changeColor(color)
         }, size: 20)
         btn.isColorSwatch = true
@@ -498,6 +526,20 @@ final class InPlaceHUDView: NSView {
         return btn
     }
 
+}
+
+// MARK: - Colour panel proxy
+
+/// `NSColorPanel` is a long-lived singleton with a **strong** `target`, so using
+/// the HUD as the target leaks the entire capture overlay. This proxy is the
+/// panel's target instead; it holds the HUD weakly and does nothing once the
+/// overlay is gone.
+private final class ColorPanelProxy: NSObject {
+    weak var hud: InPlaceHUDView?
+
+    @objc func colorChanged(_ sender: NSColorPanel) {
+        hud?.applyColorFromPanel(sender.color)
+    }
 }
 
 // MARK: - Tile button

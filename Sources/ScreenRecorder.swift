@@ -193,6 +193,17 @@ final class ScreenRecorder: NSObject {
         }
     }
 
+    /// Drops the cursor track and its sample buffers once the caller is done
+    /// with them — a long recording can hold hundreds of thousands of points
+    /// that would otherwise stay resident until the next recording starts.
+    func discardCursorTrack() {
+        lastCursorTrack = nil
+        cursorQueue.async { [weak self] in
+            self?.cursorSamples.removeAll(keepingCapacity: false)
+            self?.cursorClicks.removeAll(keepingCapacity: false)
+        }
+    }
+
     private func setupWriter(outputURL: URL, width: Int, height: Int, includeAudio: Bool) throws {
         // A same-named leftover would make the writer fail — start clean.
         try? FileManager.default.removeItem(at: outputURL)

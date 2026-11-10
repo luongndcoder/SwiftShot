@@ -146,6 +146,14 @@ final class UnifiedOverlayView: NSView {
     /// region can be remembered for the next capture.
     var currentSelection: CGRect? { selectionRect }
 
+    /// Releases the reference the shared `NSColorPanel` keeps into this view's
+    /// HUD. The panel is a singleton and strongly retains its target, so
+    /// without this the overlay window (and the full-screen snapshot + Retina
+    /// backing store behind it) would stay alive after the capture.
+    func detachSharedColorPanel() {
+        hudView?.detachColorPanel()
+    }
+
     init(
         backgroundImage: CGImage,
         screenFrame: NSRect,
@@ -346,40 +354,48 @@ final class UnifiedOverlayView: NSView {
         panel.show()
         self.translationPanel = panel
 
-        Task {
+        // Read the settings on the main thread now; the request itself runs off
+        // the main actor and the overlay may be gone by the time it finishes.
+        let provider = settings.translationProvider
+        let targetLanguage = settings.translationTargetLanguage
+        let apiKey = settings.openaiApiKey
+        let baseURL = settings.openaiBaseURL
+        let model = settings.openaiModel
+
+        Task { [weak self, weak panel] in
             do {
                 let ocrResult = try await OCRService.shared.recognizeText(in: cgImage)
                 guard !ocrResult.isEmpty else {
                     await MainActor.run {
-                        self.translationLoadingPill.isHidden = true
-                        self.hudView?.setTranslating(false)
-                        panel.setError("Không tìm thấy văn bản trong vùng chọn.")
+                        self?.translationLoadingPill.isHidden = true
+                        self?.hudView?.setTranslating(false)
+                        panel?.setError("Không tìm thấy văn bản trong vùng chọn.")
                     }
                     return
                 }
 
                 let transResult = try await TranslationService.shared.translate(
                     ocr: ocrResult,
-                    provider: settings.translationProvider,
-                    targetLanguage: settings.translationTargetLanguage,
-                    openaiApiKey: settings.openaiApiKey,
-                    openaiBaseURL: settings.openaiBaseURL,
-                    openaiModel: settings.openaiModel
+                    provider: provider,
+                    targetLanguage: targetLanguage,
+                    openaiApiKey: apiKey,
+                    openaiBaseURL: baseURL,
+                    openaiModel: model
                 )
 
                 await MainActor.run {
-                    self.translationLoadingPill.isHidden = true
-                    self.hudView?.setTranslating(false)
-                    panel.update(result: transResult)
+                    self?.translationLoadingPill.isHidden = true
+                    self?.hudView?.setTranslating(false)
+                    panel?.update(result: transResult)
                     // Automatically show overlay on image
-                    self.translatedBlocks = transResult.blocks
-                    self.needsDisplay = true
+                    self?.translatedBlocks = transResult.blocks
+                    self?.needsDisplay = true
                 }
             } catch {
                 await MainActor.run {
-                    self.translationLoadingPill.isHidden = true
-                    self.hudView?.setTranslating(false)
-                    panel.setError(error.localizedDescription)
+                    self?.translationLoadingPill.isHidden = true
+                    self?.hudView?.setTranslating(false)
+                    panel?.setError(error.localizedDescription)
                 }
             }
         }
@@ -455,24 +471,24 @@ final class UnifiedOverlayView: NSView {
         translationLoadingPill.isHidden = false
         hudView?.setTranslating(true)
 
-        Task {
+        Task { [weak self] in
             do {
                 let ocrResult = try await OCRService.shared.recognizeText(in: cgImage)
                 await MainActor.run {
-                    self.translationLoadingPill.isHidden = true
-                    self.hudView?.setTranslating(false)
+                    self?.translationLoadingPill.isHidden = true
+                    self?.hudView?.setTranslating(false)
                     if ocrResult.isEmpty {
-                        self.showToast("Không tìm thấy văn bản nào trong vùng chọn")
+                        self?.showToast("Không tìm thấy văn bản nào trong vùng chọn")
                     } else {
-                        self.enterLiveTextMode(blocks: ocrResult.blocks)
-                        self.showToast("Đã nhận diện \(ocrResult.blocks.count) dòng chữ. Nhấp hoặc kéo để chọn!")
+                        self?.enterLiveTextMode(blocks: ocrResult.blocks)
+                        self?.showToast("Đã nhận diện \(ocrResult.blocks.count) dòng chữ. Nhấp hoặc kéo để chọn!")
                     }
                 }
             } catch {
                 await MainActor.run {
-                    self.translationLoadingPill.isHidden = true
-                    self.hudView?.setTranslating(false)
-                    self.showToast(error.localizedDescription)
+                    self?.translationLoadingPill.isHidden = true
+                    self?.hudView?.setTranslating(false)
+                    self?.showToast(error.localizedDescription)
                 }
             }
         }
@@ -1743,15 +1759,13 @@ final class UnifiedOverlayView: NSView {
             blurFilter?.setValue(CIImage(cgImage: cropped), forKey: kCIInputImageKey)
             blurFilter?.setValue(12, forKey: kCIInputRadiusKey)
             if let output = blurFilter?.outputImage {
-                let ciContext = CIContext(cgContext: context, options: nil)
-                ciContext.draw(output, in: rect, from: sourceRect)
+                drawEffectImage(output, from: sourceRect, in: rect, context: context)
             }
         case .invert:
             let invertFilter = CIFilter(name: "CIColorInvert")
             invertFilter?.setValue(CIImage(cgImage: cropped), forKey: kCIInputImageKey)
             if let output = invertFilter?.outputImage {
-                let ciContext = CIContext(cgContext: context, options: nil)
-                ciContext.draw(output, in: rect, from: sourceRect)
+                drawEffectImage(output, from: sourceRect, in: rect, context: context)
             }
         default:
             let smallWidth = max(1, Int(rect.width / 8))
@@ -1770,6 +1784,17 @@ final class UnifiedOverlayView: NSView {
             context.draw(smallImage, in: rect)
             context.restoreGState()
         }
+    }
+
+    /// One `CIContext` for every effect draw. Creating a context per frame is
+    /// expensive and leaves GPU/cache resources behind while a blur annotation
+    /// is being dragged; the shared context renders the effect into a CGImage
+    /// that is then composited into whichever context is being drawn.
+    private static let effectContext = CIContext(options: [.useSoftwareRenderer: false])
+
+    private func drawEffectImage(_ image: CIImage, from sourceRect: CGRect, in rect: CGRect, context: CGContext) {
+        guard let rendered = Self.effectContext.createCGImage(image, from: sourceRect) else { return }
+        context.draw(rendered, in: rect)
     }
 
     override func scrollWheel(with event: NSEvent) {

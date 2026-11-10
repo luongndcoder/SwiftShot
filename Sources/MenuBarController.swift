@@ -39,20 +39,44 @@ final class MenuBarController {
         showTransient(message, isError: true)
     }
 
-    func showTransient(_ message: String, isError: Bool = false) {
-        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 260, height: 44),
-                             styleMask: [.borderless, .nonactivatingPanel],
-                             backing: .buffered, defer: false)
-        panel.level = .floating
-        panel.backgroundColor = NSColor.clear
-        panel.isOpaque = false
-        panel.hasShadow = true
+    // MARK: - Toast
 
-        let label = NSTextField(labelWithString: message)
-        label.alignment = .center
+    private var toastPanel: NSPanel?
+    private var toastLabel: NSTextField?
+
+    func showTransient(_ message: String, isError: Bool = false) {
+        // One panel is reused for every toast. Creating a window per message
+        // left each one (plus its layer/backing store) alive for a couple of
+        // seconds, which grew the heap steadily during a capture session.
+        let panel: NSPanel
+        let label: NSTextField
+        if let existingPanel = toastPanel, let existingLabel = toastLabel {
+            panel = existingPanel
+            label = existingLabel
+        } else {
+            let newPanel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 260, height: 44),
+                                   styleMask: [.borderless, .nonactivatingPanel],
+                                   backing: .buffered, defer: false)
+            newPanel.level = .floating
+            newPanel.backgroundColor = NSColor.clear
+            newPanel.isOpaque = false
+            newPanel.hasShadow = true
+            newPanel.ignoresMouseEvents = true
+            newPanel.isReleasedWhenClosed = false
+
+            let newLabel = NSTextField(labelWithString: "")
+            newLabel.alignment = .center
+            newLabel.autoresizingMask = [.width, .height]
+            newPanel.contentView?.addSubview(newLabel)
+
+            toastPanel = newPanel
+            toastLabel = newLabel
+            panel = newPanel
+            label = newLabel
+        }
+
+        label.stringValue = message
         label.textColor = isError ? .systemRed : .labelColor
-        label.autoresizingMask = [.width, .height]
-        panel.contentView?.addSubview(label)
         label.frame = (panel.contentView?.bounds ?? panel.frame).insetBy(dx: 12, dy: 8)
 
         // Position near the status item, above the menu bar.
@@ -64,8 +88,8 @@ final class MenuBarController {
         }
         panel.orderFrontRegardless()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            panel.orderOut(nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak panel] in
+            panel?.orderOut(nil)
         }
     }
 
@@ -214,15 +238,33 @@ final class MenuBarController {
         guard let settings = appState?.settings else { return }
 
         let hostingView = NSHostingView(rootView: SettingsView(settings: settings))
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 380),
-                             styleMask: [.titled, .closable, .miniaturizable],
-                             backing: .buffered, defer: false)
+        let window = SettingsWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 380),
+                                    styleMask: [.titled, .closable, .miniaturizable],
+                                    backing: .buffered, defer: false)
         window.title = "SwiftShot Settings"
         window.contentView = hostingView
         window.center()
         window.isReleasedWhenClosed = false
+        // Rebuild the panel next time instead of keeping the SwiftUI hosting
+        // graph (and its whole state tree) alive for the app's lifetime.
+        window.onClose = { [weak self] in
+            self?.settingsWindow = nil
+        }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow = window
+    }
+}
+
+/// Settings window that drops its SwiftUI content when closed, so the hosting
+/// graph is deallocated together with the window.
+private final class SettingsWindow: NSWindow {
+    var onClose: (() -> Void)?
+
+    override func close() {
+        super.close()
+        contentView = nil
+        onClose?()
+        onClose = nil
     }
 }

@@ -78,6 +78,18 @@ final class ScreenshotOverlayController {
         overlayWindow.acceptsMouseMovedEvents = true
         overlayWindow.hasShadow = false
         overlayWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        // The controller owns the window strongly, so closing it must not send
+        // an extra release under ARC.
+        overlayWindow.isReleasedWhenClosed = false
+        // Keep AppKit from keeping the closed window (and its full-screen
+        // drawable) in the window-restoration registry.
+        overlayWindow.isRestorable = false
+        overlayWindow.identifier = nil
+        // The XDR display makes AppKit back windows with half-float (8 bytes
+        // per pixel) surfaces — 59 MB for this screen size. The overlay only
+        // previews a screenshot, so an sRGB backing store is enough and halves
+        // the drawable the window keeps around.
+        overlayWindow.colorSpace = .sRGB
         overlayWindow.contentView = overlayView
 
         self.window = overlayWindow
@@ -115,10 +127,25 @@ final class ScreenshotOverlayController {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
         }
+
+        guard let closingWindow = window else { return }
+        window = nil
+
+        // `close()` is called from the overlay's own event handling (mouse and
+        // key callbacks), so the window — and with it the content view whose
+        // method is still on the stack — must outlive this call. Only the colour
+        // panel link is cut right away; the rest is torn down on the next turn.
+        (closingWindow.contentView as? UnifiedOverlayView)?.detachSharedColorPanel()
         // The shared colour panel is raised above the overlay — restore its level.
         NSColorPanel.shared.level = .normal
-        window?.orderOut(nil)
-        window = nil
+        closingWindow.orderOut(nil)
+
+        DispatchQueue.main.async {
+            // Dropping the view releases the full-screen snapshot and the
+            // Retina backing store the overlay was drawn on.
+            closingWindow.contentView = nil
+            closingWindow.close()
+        }
     }
 
     private func finish(image: NSImage, rect: CGRect, action: CaptureAction) {

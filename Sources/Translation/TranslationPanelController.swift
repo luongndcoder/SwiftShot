@@ -95,9 +95,13 @@ final class TranslationPanelController: NSWindowController, NSWindowDelegate {
     // MARK: - View update
 
     private func updateHostingView() {
+        // The binding is owned by the SwiftUI graph, which is owned by the panel
+        // window, which is owned by this controller — capturing `self` strongly
+        // here closes that cycle and keeps the whole panel (and its host view)
+        // alive after it is closed.
         let bindingTarget = Binding<String>(
-            get: { self.targetLang },
-            set: { self.targetLang = $0 }
+            get: { [weak self] in self?.targetLang ?? "" },
+            set: { [weak self] in self?.targetLang = $0 }
         )
 
         let orig = currentResult?.originalFullText ?? currentOCR?.fullText ?? ""

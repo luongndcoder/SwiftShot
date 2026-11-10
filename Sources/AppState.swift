@@ -81,7 +81,12 @@ final class AppState: ObservableObject {
     private func startZoomExportIfEnabled(for url: URL) {
         guard settings.autoZoomOnClicks,
               let track = recorder.lastCursorTrack,
-              !track.clicks.isEmpty else { return }
+              !track.clicks.isEmpty else {
+            // Nothing in the track is usable — release its samples instead of
+            // holding hundreds of thousands of points until the next recording.
+            recorder.discardCursorTrack()
+            return
+        }
 
         var zoomURL = url.deletingPathExtension()
         zoomURL = URL(fileURLWithPath: zoomURL.path + "-zoom").appendingPathExtension(url.pathExtension)
@@ -91,6 +96,9 @@ final class AppState: ObservableObject {
         menuBar.showTransient("Rendering zoom version…")
         exporter.export(input: url, output: zoomURL, track: track, zoomLevel: settings.autoZoomLevel) { [weak self] result in
             guard let self else { return }
+            // The track is consumed by now; do not keep it (and its samples)
+            // resident until the next recording overwrites it.
+            self.recorder.discardCursorTrack()
             self.zoomExporter = nil
             switch result {
             case .success(let output):

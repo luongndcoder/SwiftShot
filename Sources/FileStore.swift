@@ -41,13 +41,22 @@ enum SaveFormat: String, CaseIterable, Identifiable {
 
     /// Encodes an image with this format.
     func data(for image: NSImage, quality: Double = 1.0) -> Data? {
-        guard let tiff = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
-
         var properties: [NSBitmapImageRep.PropertyKey: Any] = [:]
         if self == .jpeg {
             properties[.compressionFactor] = max(0.1, min(quality, 1.0))
         }
+
+        // Encode straight from the CGImage when there is one. The old path went
+        // through `tiffRepresentation`, which materialises an extra full-size
+        // TIFF of the capture (tens of MB for a Retina screenshot) just to hand
+        // it to `NSBitmapImageRep` — doubling peak memory on every save.
+        if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            let bitmap = NSBitmapImageRep(cgImage: cgImage)
+            return bitmap.representation(using: fileType, properties: properties)
+        }
+
+        guard let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
         return bitmap.representation(using: fileType, properties: properties)
     }
 }

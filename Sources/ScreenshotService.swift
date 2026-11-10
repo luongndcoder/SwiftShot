@@ -1,4 +1,5 @@
 import AppKit
+import CoreVideo
 import ScreenCaptureKit
 
 /// Screen capture via ScreenCaptureKit (macOS 14+).
@@ -30,6 +31,10 @@ final class ScreenshotService {
             config.height = Int(screen.frame.height * scale)
             config.scalesToFit = false
             config.showsCursor = false
+            // Without an explicit pixel format ScreenCaptureKit hands back a
+            // half-float RGBA frame (8 bytes per pixel) — twice the memory of
+            // the BGRA buffer the rest of the app expects.
+            config.pixelFormat = kCVPixelFormatType_32BGRA
 
             let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
             return (image, screen)
@@ -97,6 +102,9 @@ final class ScreenshotService {
         config.height = Int(target.frame.height * scale)
         config.scalesToFit = false
         config.showsCursor = false
+        // Keep the frame in the BGRA layout the rest of the app assumes (see
+        // `PixelSampler`); the default half-float format doubles the memory.
+        config.pixelFormat = kCVPixelFormatType_32BGRA
 
         let full = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
 
